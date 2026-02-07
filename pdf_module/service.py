@@ -65,12 +65,24 @@ def get_document(doc_id: int) -> dict | None:
     return next((d for d in data.get("documents", []) if d["id"] == doc_id), None)
 
 
+def _path_under_upload_dir(path: Path) -> bool:
+    """Return True if path resolves to a location under UPLOAD_DIR."""
+    base = UPLOAD_DIR.resolve()
+    try:
+        path.resolve().relative_to(base)
+        return True
+    except ValueError:
+        return False
+
+
 def get_document_path(doc_id: int) -> Path | None:
-    """Get filesystem path for document file, or None if not found."""
+    """Get filesystem path for document file, or None if not found or path traversal."""
     doc = get_document(doc_id)
     if not doc:
         return None
-    path = UPLOAD_DIR / doc["filename"]
+    path = (UPLOAD_DIR / doc["filename"]).resolve()
+    if not _path_under_upload_dir(path):
+        return None
     return path if path.exists() else None
 
 
@@ -80,8 +92,8 @@ def delete_document(doc_id: int) -> bool:
     doc = next((d for d in data["documents"] if d["id"] == doc_id), None)
     if not doc:
         return False
-    path = UPLOAD_DIR / doc["filename"]
-    if path.exists():
+    path = (UPLOAD_DIR / doc["filename"]).resolve()
+    if path.exists() and _path_under_upload_dir(path):
         path.unlink()
     data["documents"] = [d for d in data["documents"] if d["id"] != doc_id]
     data["document_links"] = [lnk for lnk in data["document_links"] if lnk.get("document_id") != doc_id]

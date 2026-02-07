@@ -1,10 +1,8 @@
 """Unit tests for PDF module - upload, serve, list, links, markups."""
 
 import json
-import tempfile
-from pathlib import Path
+from io import BytesIO
 
-import pytest
 from fastapi.testclient import TestClient
 
 # Minimal valid single-page PDF
@@ -23,47 +21,6 @@ startxref
 178
 %%EOF
 """
-
-
-@pytest.fixture
-def temp_data_dir(tmp_path):
-    """Create temp dir with data.json and documents/ for isolated tests."""
-    data_file = tmp_path / "data.json"
-    docs_dir = tmp_path / "documents"
-    docs_dir.mkdir()
-
-    default_data = {
-        "projects": [{"id": 1, "title": "Test", "goal": "", "deadline": ""}],
-        "areas": [{"id": 1, "title": "Inbox"}],
-        "resources": [],
-        "archives": [],
-        "tasks": [{"id": 1, "title": "Task 1", "priority": "medium", "parent_type": "area", "parent_id": 1}],
-        "documents": [],
-        "document_links": [],
-        "document_markups": [],
-    }
-    data_file.write_text(json.dumps(default_data, indent=2))
-
-    return tmp_path, data_file, docs_dir
-
-
-@pytest.fixture
-def app_with_temp_data(temp_data_dir, monkeypatch):
-    """Patch data_access to use temp paths, return app and paths."""
-    tmp_path, data_file, docs_dir = temp_data_dir
-
-    monkeypatch.setattr("data_access.DATA_FILE", data_file)
-    monkeypatch.setattr("data_access.UPLOAD_DIR", docs_dir)
-    monkeypatch.setattr("pdf_module.service.UPLOAD_DIR", docs_dir)
-
-    from main import app
-    return app, tmp_path, data_file, docs_dir
-
-
-@pytest.fixture
-def client(app_with_temp_data):
-    app, _, _, _ = app_with_temp_data
-    return TestClient(app)
 
 
 def test_upload_document(client):
@@ -195,3 +152,60 @@ def test_delete_document(client):
 
     assert client.get(f"/api/documents/{doc_id}").status_code == 404
     assert client.get(f"/api/documents/{doc_id}/file").status_code == 404
+
+
+def test_serve_document_file_rejects_path_traversal(app_with_temp_data):
+    """Document with path traversal filename returns 404."""
+    app, tmp_path, data_file, docs_dir = app_with_temp_data
+    tampered = {
+        "projects": [{"id": 1, "title": "Test", "goal": "", "deadline": ""}],
+        "areas": [{"id": 1, "title": "Inbox"}],
+        "resources": [],
+        "archives": [],
+        "tasks": [{"id": 1, "title": "Task 1", "priority": "medium", "parent_type": "area", "parent_id": 1}],
+        "documents": [
+            {"id": 1, "filename": "../../outside", "original_name": "x.pdf", "uploaded_at": "2026-01-01T00:00:00Z"}
+        ],
+        "document_links": [],
+        "document_markups": [],
+    }
+    data_file.write_text(json.dumps(tampered, indent=2))
+
+    client = TestClient(app)
+    response = client.get("/api/documents/1/file")
+    assert response.status_code == 404
+
+
+def test_delete_document_ignores_traversal_filename(app_with_temp_data):
+    """Delete removes record but does not touch files outside upload dir."""
+    app, tmp_path, data_file, docs_dir = app_with_temp_data
+    tampered = {
+        "projects": [{"id": 1, "title": "Test", "goal": "", "deadline": ""}],
+        "areas": [{"id": 1, "title": "Inbox"}],
+        "resources": [],
+        "archives": [],
+        "tasks": [{"id": 1, "title": "Task 1", "priority": "medium", "parent_type": "area", "parent_id": 1}],
+        "documents": [
+            {"id": 1, "filename": "../../outside", "original_name": "x.pdf", "uploaded_at": "2026-01-01T00:00:00Z"}
+        ],
+        "document_links": [],
+        "document_markups": [],
+    }
+    data_file.write_text(json.dumps(tampered, indent=2))
+
+    client = TestClient(app)
+    resp = client.delete("/api/documents/1")
+    assert resp.status_code == 200
+    assert client.get("/api/documents/1").status_code == 404
+
+
+def test_upload_file_too_large_returns_413(client: TestClient):
+    """File > 50 MB returns 413."""
+    # 50 MB + 1 byte to exceed limit
+    max_bytes = 50 * 1024 * 1024
+    large_content = b"%PDF-1.4\n" + (b"x" * (max_bytes - 7))
+    response = client.post(
+        "/api/documents/upload",
+        files={"file": ("large.pdf", BytesIO(large_content), "application/pdf")},
+    )
+    assert response.status_code == 413

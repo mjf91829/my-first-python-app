@@ -1,26 +1,48 @@
 """FastAPI routes for PDF documents."""
 
+import asyncio
+import logging
+
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
 from pdf_module.models import DocumentLinkCreate, DocumentLinkRemove, MarkupsSaveBody
 from pdf_module import service
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(tags=["pdf"])
+
+MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # 50 MB
+CHUNK_SIZE = 64 * 1024  # 64 KB
 
 
 @router.post("/documents/upload")
 async def upload_document(file: UploadFile = File(...)):
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are allowed")
-    content = await file.read()
+    content_length = file.size if hasattr(file, "size") else None
+    if content_length is not None and content_length > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="File too large")
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = await file.read(CHUNK_SIZE)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail="File too large")
+        chunks.append(chunk)
+    content = b"".join(chunks)
     if not content:
         raise HTTPException(status_code=400, detail="Empty file")
     try:
-        doc = service.upload_document(content, file.filename)
+        doc = await asyncio.to_thread(service.upload_document, content, file.filename)
         return doc
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("Upload failed")
+        raise HTTPException(status_code=500, detail="Upload failed")
 
 
 @router.get("/documents")

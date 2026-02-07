@@ -101,6 +101,11 @@
       "document_id": 1,
       "linked_type": "task",
       "linked_id": 1
+    },
+    {
+      "document_id": 1,
+      "linked_type": "area",
+      "linked_id": 2
     }
   ],
   "document_markups": []
