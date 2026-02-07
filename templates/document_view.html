@@ -37,12 +37,26 @@
     .toolbar .context-wrap select { padding: 0.35rem 0.5rem; border-radius: 4px; border: 1px solid #ccc; }
     .pdf-container {
       flex: 1;
-      overflow: auto;
+      overflow: hidden;
       background: #525659;
       display: flex;
       flex-direction: column;
-      align-items: center;
+      align-items: stretch;
       padding: 1rem;
+    }
+    .pdf-container .pdf-object {
+      flex: 1;
+      width: 100%;
+      min-height: 400px;
+      min-width: 0;
+    }
+    .pdf-container .pdf-fallback {
+      padding: 2rem;
+      color: #fff;
+      text-align: center;
+    }
+    .pdf-container .pdf-fallback a {
+      color: #60a5fa;
     }
     .page-wrap {
       position: relative;
@@ -122,9 +136,15 @@
       <select id="context-select"></select>
     </div>
   </div>
-  <div class="pdf-container" id="pdf-container"></div>
+  <div class="pdf-container" id="pdf-container">
+    <div id="pdf-display-wrap" style="flex:1;display:flex;flex-direction:column;min-height:0;transform-origin:top left;">
+      <object data="/api/documents/{{ doc_id }}/file" type="application/pdf" class="pdf-object">
+        <p class="pdf-fallback">Your browser cannot display PDFs inline. <a href="/api/documents/{{ doc_id }}/file" target="_blank" rel="noopener">Open PDF in new tab</a></p>
+      </object>
+    </div>
+  </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/legacy/build/pdf.min.js"></script>
+  <script src="/static/pdf.min.js"></script>
   <script>
     function whenPdfJsReady() {
       if (typeof pdfjsLib !== 'undefined') return Promise.resolve();
@@ -138,7 +158,7 @@
     }
     whenPdfJsReady().then(function () {
       if (typeof pdfjsLib !== 'undefined') {
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/legacy/build/pdf.worker.min.js';
+        pdfjsLib.GlobalWorkerOptions.workerSrc = '/static/pdf.worker.min.js';
       }
     });
     const DOC_ID = {{ doc_id }};
@@ -477,19 +497,47 @@
         await loadMarkups();
         await renderPdf();
       } catch (e) {
-        container.textContent = 'Failed to load PDF: ' + e.message;
+        showIframeFallback();
       }
+    }
+
+    function showIframeFallback() {
+      container.innerHTML = '';
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'flex:1;display:flex;overflow:auto;';
+      const iframe = document.createElement('iframe');
+      iframe.id = 'pdf-iframe';
+      iframe.src = '/api/documents/' + DOC_ID + '/file';
+      iframe.style.cssText = 'width:100%;height:100%;min-height:80vh;border:none;transform-origin:0 0;';
+      wrap.appendChild(iframe);
+      container.appendChild(wrap);
+      window._pdfIframeWrap = wrap;
+      window._pdfIframe = iframe;
     }
 
     function zoomIn() {
       scale = Math.min(3, scale + 0.25);
       updateZoomDisplay();
-      renderPdf();
+      const wrap = document.getElementById('pdf-display-wrap');
+      if (wrap) {
+        wrap.style.transform = 'scale(' + scale + ')';
+        wrap.style.width = (100 / scale) + '%';
+        wrap.style.height = (100 / scale) + '%';
+      } else {
+        renderPdf();
+      }
     }
     function zoomOut() {
       scale = Math.max(0.5, scale - 0.25);
       updateZoomDisplay();
-      renderPdf();
+      const wrap = document.getElementById('pdf-display-wrap');
+      if (wrap) {
+        wrap.style.transform = 'scale(' + scale + ')';
+        wrap.style.width = (100 / scale) + '%';
+        wrap.style.height = (100 / scale) + '%';
+      } else {
+        renderPdf();
+      }
     }
 
     document.getElementById('btn-zoom-in').addEventListener('click', zoomIn);
@@ -500,13 +548,6 @@
     document.getElementById('btn-mode-comment').addEventListener('click', () => setMode('comment'));
 
     updateZoomDisplay();
-    whenPdfJsReady().then(function () {
-      if (typeof pdfjsLib === 'undefined') {
-        document.getElementById('pdf-container').textContent = 'Failed to load PDF viewer library.';
-        return;
-      }
-      loadPdf();
-    });
   </script>
 </body>
 </html>

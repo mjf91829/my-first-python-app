@@ -5,11 +5,13 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from data_access import load_data, next_id, save_data
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
+STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 
 # Pydantic models
@@ -54,6 +56,8 @@ app = FastAPI(title="PARA Task App")
 from pdf_module.routes import router as pdf_router
 
 app.include_router(pdf_router, prefix="/api")
+if STATIC_DIR.exists():
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
 def _render_template(name: str, request: Request, **kwargs):
