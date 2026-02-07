@@ -127,5 +127,25 @@
       "linked_id": 8
     }
   ],
-  "document_markups": []
+  "document_markups": [
+    {
+      "document_id": 1,
+      "linked_type": "project",
+      "linked_id": 1,
+      "markups": [
+        {
+          "id": "m_hpdicn2rlgmlcu9ifh",
+          "page": 0,
+          "type": "comment",
+          "bounds": {
+            "x": 0.7761437908496732,
+            "y": 0.1001683437463009,
+            "width": 0.03,
+            "height": 0.03
+          },
+          "text": "test"
+        }
+      ]
+    }
+  ]
 }
