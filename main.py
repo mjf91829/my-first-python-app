@@ -21,6 +21,7 @@ class ProjectCreate(BaseModel):
 
 class AreaCreate(BaseModel):
     title: str
+    project_id: int | None = None
 
 
 class ResourceCreate(BaseModel):
@@ -96,9 +97,11 @@ async def create_project(project: ProjectCreate):
 
 
 @app.get("/api/areas")
-async def get_areas(sort: str | None = None):
+async def get_areas(sort: str | None = None, project_id: int | None = None):
     data = load_data()
     areas = list(data["areas"])
+    if project_id is not None:
+        areas = [a for a in areas if a.get("project_id") == project_id]
     if sort == "title":
         areas.sort(key=lambda a: a.get("title", "").lower())
     return {"areas": areas}
@@ -107,8 +110,13 @@ async def get_areas(sort: str | None = None):
 @app.post("/api/areas")
 async def create_area(area: AreaCreate):
     data = load_data()
+    if area.project_id is not None:
+        if not any(p["id"] == area.project_id for p in data["projects"]):
+            return {"error": "Project not found"}
     new_id = next_id("areas", data)
     new_area = {"id": new_id, "title": area.title}
+    if area.project_id is not None:
+        new_area["project_id"] = area.project_id
     data["areas"].append(new_area)
     save_data(data)
     return new_area
@@ -148,7 +156,12 @@ async def move_to_archive(body: ArchiveMoveBody):
         container = next((p for p in data["projects"] if p["id"] == body.id), None)
         if not container:
             return {"error": "Project not found"}
-        tasks_snapshot = [t for t in data["tasks"] if t.get("parent_type") == "project" and t.get("parent_id") == body.id]
+        nested_areas = [a for a in data["areas"] if a.get("project_id") == body.id]
+        area_ids = {a["id"] for a in nested_areas}
+        tasks_direct = [t for t in data["tasks"] if t.get("parent_type") == "project" and t.get("parent_id") == body.id]
+        tasks_under_areas = [t for t in data["tasks"] if t.get("parent_type") == "area" and t.get("parent_id") in area_ids]
+        tasks_snapshot = tasks_direct + tasks_under_areas
+        areas_snapshot = [{"id": a["id"], "title": a["title"], "tasks": [t for t in tasks_under_areas if t.get("parent_id") == a["id"]]} for a in nested_areas]
         archive_entry = {
             "id": next_id("archives", data),
             "type": "project",
@@ -157,7 +170,17 @@ async def move_to_archive(body: ArchiveMoveBody):
             "deadline": container.get("deadline", ""),
             "archived_at": datetime.now(tz=timezone.utc).isoformat(),
             "tasks": tasks_snapshot,
+            "areas": areas_snapshot,
         }
+        data["archives"].append(archive_entry)
+        data["projects"] = [p for p in data["projects"] if p["id"] != body.id]
+        data["areas"] = [a for a in data["areas"] if a.get("project_id") != body.id]
+        data["tasks"] = [t for t in data["tasks"] if not (
+            (t.get("parent_type") == "project" and t.get("parent_id") == body.id) or
+            (t.get("parent_type") == "area" and t.get("parent_id") in area_ids)
+        )]
+        save_data(data)
+        return {"ok": True, "archived": archive_entry}
     elif body.type == "area":
         container = next((a for a in data["areas"] if a["id"] == body.id), None)
         if not container:
@@ -172,17 +195,13 @@ async def move_to_archive(body: ArchiveMoveBody):
             "archived_at": datetime.now(tz=timezone.utc).isoformat(),
             "tasks": tasks_snapshot,
         }
+        data["archives"].append(archive_entry)
+        data["areas"] = [a for a in data["areas"] if a["id"] != body.id]
+        data["tasks"] = [t for t in data["tasks"] if not (t.get("parent_type") == "area" and t.get("parent_id") == body.id)]
+        save_data(data)
+        return {"ok": True, "archived": archive_entry}
     else:
         return {"error": "Invalid type; use project or area"}
-    data["archives"].append(archive_entry)
-    data["projects"] = [p for p in data["projects"] if p["id"] != body.id] if body.type == "project" else data["projects"]
-    data["areas"] = [a for a in data["areas"] if a["id"] != body.id] if body.type == "area" else data["areas"]
-    data["tasks"] = [t for t in data["tasks"] if not (
-        (body.type == "project" and t.get("parent_type") == "project" and t.get("parent_id") == body.id) or
-        (body.type == "area" and t.get("parent_type") == "area" and t.get("parent_id") == body.id)
-    )]
-    save_data(data)
-    return {"ok": True, "archived": archive_entry}
 
 
 @app.get("/api/tasks")
