@@ -4,61 +4,168 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PARA Task Manager</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
+    :root {
+      --bg-page: #f7f8fa;
+      --bg-card: #ffffff;
+      --accent: #2563eb;
+      --accent-hover: #1d4ed8;
+      --text-primary: #1a1a2e;
+      --text-secondary: #64748b;
+      --border: #e2e8f0;
+      --radius-sm: 6px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+      --shadow-card: 0 1px 3px rgba(0,0,0,0.06);
+      --shadow-card-hover: 0 4px 12px rgba(0,0,0,0.08);
+      --priority-high: #dc2626;
+      --priority-medium: #d97706;
+      --priority-low: #6b7280;
+    }
     * { box-sizing: border-box; }
-    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; }
-    h1 { margin-bottom: 0.5rem; }
-    .view-toggle { margin-bottom: 1.5rem; }
-    .view-toggle button { padding: 0.5rem 1rem; margin-right: 0.5rem; cursor: pointer; border: 1px solid #ccc; background: #f5f5f5; border-radius: 4px; }
-    .view-toggle button.active { background: #333; color: #fff; border-color: #333; }
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: var(--bg-page);
+      color: var(--text-primary);
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+    }
+    .app-sidebar {
+      width: 220px;
+      min-width: 220px;
+      background: var(--bg-card);
+      border-right: 1px solid var(--border);
+      padding: 1.5rem 0;
+      flex-shrink: 0;
+    }
+    .app-sidebar .logo { padding: 0 1.25rem 1.25rem; font-weight: 700; font-size: 1.15rem; color: var(--text-primary); }
+    .app-sidebar nav { display: flex; flex-direction: column; gap: 0.25rem; }
+    .app-sidebar nav button {
+      width: 100%;
+      padding: 0.6rem 1.25rem;
+      border: none;
+      background: none;
+      font-family: inherit;
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+      text-align: left;
+      cursor: pointer;
+      border-radius: 0;
+      transition: background 0.15s, color 0.15s;
+    }
+    .app-sidebar nav button:hover { background: var(--bg-page); color: var(--text-primary); }
+    .app-sidebar nav button.active { background: rgba(37, 99, 235, 0.1); color: var(--accent); }
+    .app-main { flex: 1; max-width: 800px; padding: 2rem; margin: 0 auto; width: 100%; }
+    h1 { font-size: 1.75rem; font-weight: 700; margin: 0 0 1.5rem; color: var(--text-primary); }
     .panel { display: none; }
     .panel.visible { display: block; }
-    .filters { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1rem; align-items: center; }
-    .filters label { font-size: 0.9rem; }
-    .filters select { padding: 0.35rem 0.5rem; }
-    form { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; align-items: flex-end; }
-    form input[type="text"], form input[type="url"], form input[type="date"] { flex: 1; min-width: 120px; padding: 0.5rem; }
-    form select { padding: 0.5rem; min-width: 100px; }
-    form textarea { width: 100%; min-height: 60px; padding: 0.5rem; }
-    button { padding: 0.5rem 1rem; cursor: pointer; border-radius: 4px; border: 1px solid #ccc; background: #f5f5f5; }
-    button.primary { background: #333; color: #fff; border-color: #333; }
-    button.archive-btn { font-size: 0.8rem; margin-left: auto; }
+    .filters { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.5rem; align-items: center; }
+    .filters label { font-size: 0.875rem; font-weight: 500; color: var(--text-secondary); }
+    .filters select { padding: 0.5rem 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border); font-size: 0.875rem; background: var(--bg-card); }
+    .form-section { margin-bottom: 1.5rem; }
+    .form-section h3 { font-size: 0.9rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-secondary); }
+    form { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.5rem; align-items: flex-end; }
+    form input[type="text"], form input[type="url"], form input[type="date"] { flex: 1; min-width: 140px; padding: 0.6rem 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.9rem; }
+    form input:focus, form select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2); }
+    form select { padding: 0.6rem 0.75rem; min-width: 120px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.9rem; background: var(--bg-card); }
+    form textarea { width: 100%; min-height: 72px; padding: 0.6rem 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.9rem; font-family: inherit; }
+    button { padding: 0.6rem 1rem; cursor: pointer; border-radius: var(--radius-sm); font-size: 0.875rem; font-weight: 500; font-family: inherit; transition: background 0.15s, border-color 0.15s; }
+    button.primary { background: var(--accent); color: #fff; border: none; }
+    button.primary:hover { background: var(--accent-hover); }
+    button.archive-btn { font-size: 0.8rem; margin-left: auto; background: var(--bg-page); color: var(--text-secondary); border: 1px solid var(--border); }
+    button.archive-btn:hover { background: var(--border); color: var(--text-primary); }
     ul { list-style: none; padding: 0; margin: 0; }
-    .container-card { border: 1px solid #ddd; border-radius: 8px; margin-bottom: 1rem; padding: 1rem; }
-    .container-card.project { border-left: 4px solid #2c5; }
-    .container-card.area { border-left: 4px solid #58c; }
+    .container-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+      box-shadow: var(--shadow-card);
+      transition: box-shadow 0.2s;
+    }
+    .container-card:hover { box-shadow: var(--shadow-card-hover); }
+    .container-card.project { border-left: 4px solid var(--accent); }
+    .container-card.area { border-left: 4px solid var(--text-secondary); }
+    .container-card.nested-area { margin-left: 1.25rem; border-left-color: #94a3b8; }
     .container-header { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.5rem; }
-    .container-title { font-weight: bold; font-size: 1.05rem; }
-    .container-meta { font-size: 0.85rem; color: #666; }
-    .task-list { margin-top: 0.5rem; padding-left: 0.5rem; }
-    .task-item { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; padding: 0.5rem; border: 1px solid #eee; border-radius: 6px; margin-bottom: 0.4rem; }
+    .container-title { font-weight: 600; font-size: 1.05rem; }
+    .container-meta { font-size: 0.85rem; color: var(--text-secondary); }
+    .project-nested-areas { margin-bottom: 1rem; }
+    .task-list { margin-top: 0.75rem; padding-left: 0; }
+    .task-item {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem;
+      padding: 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      margin-bottom: 0.5rem;
+      background: var(--bg-page);
+    }
+    .task-item .priority-pill {
+      display: inline-block;
+      padding: 0.2rem 0.5rem;
+      border-radius: 999px;
+      font-size: 0.7rem; font-weight: 600; text-transform: uppercase;
+    }
+    .task-item .priority-pill.high { background: rgba(220, 38, 38, 0.15); color: var(--priority-high); }
+    .task-item .priority-pill.medium { background: rgba(217, 119, 6, 0.15); color: var(--priority-medium); }
+    .task-item .priority-pill.low { background: rgba(107, 114, 128, 0.2); color: var(--priority-low); }
     .task-item .priority { font-size: 0.8rem; text-transform: uppercase; }
-    .suggest-btn { font-size: 0.8rem; margin-left: auto; }
-    .suggestion { width: 100%; margin-top: 0.25rem; padding: 0.5rem; background: #f0f7ff; border-radius: 4px; font-size: 0.85rem; }
-    .error { color: #c00; }
-    .section-title { font-size: 1rem; margin: 1.25rem 0 0.5rem; color: #555; }
-    .resource-item, .archive-item { padding: 0.6rem; border: 1px solid #eee; border-radius: 6px; margin-bottom: 0.5rem; }
-    .archive-item .archived-tasks { margin-top: 0.5rem; padding-left: 0.75rem; font-size: 0.9rem; display: none; }
-    .archive-item.expanded .archived-tasks { display: block; }
-    .form-section { margin-bottom: 1.25rem; }
-    .form-section h3 { font-size: 0.95rem; margin-bottom: 0.5rem; }
-    .document-item { padding: 0.6rem; border: 1px solid #eee; border-radius: 6px; margin-bottom: 0.5rem; }
-    .document-item .doc-name { font-weight: bold; }
-    .document-item .doc-meta { font-size: 0.85rem; color: #666; margin: 0.25rem 0; }
+    .suggest-btn { font-size: 0.8rem; margin-left: auto; background: transparent; color: var(--accent); border: none; }
+    .suggest-btn:hover { text-decoration: underline; }
+    .suggestion { width: 100%; margin-top: 0.5rem; padding: 0.6rem; background: rgba(37, 99, 235, 0.08); border-radius: var(--radius-sm); font-size: 0.85rem; color: var(--text-primary); }
+    .error { color: var(--priority-high); }
+    .section-title { font-size: 0.9rem; font-weight: 600; margin: 1.5rem 0 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.02em; }
+    .resource-item, .archive-item {
+      padding: 1rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      margin-bottom: 0.75rem;
+      background: var(--bg-card);
+      box-shadow: var(--shadow-card);
+    }
+    .archive-item .archived-content { margin-top: 0.75rem; padding-left: 0.75rem; font-size: 0.875rem; display: none; color: var(--text-secondary); }
+    .archive-item.expanded .archived-content { display: block; }
+    .archive-item .archived-area-block { margin-bottom: 0.75rem; }
+    .document-item {
+      padding: 1rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      margin-bottom: 0.75rem;
+      background: var(--bg-card);
+      box-shadow: var(--shadow-card);
+    }
+    .document-item .doc-name { font-weight: 600; }
+    .document-item .doc-meta { font-size: 0.85rem; color: var(--text-secondary); margin: 0.25rem 0; }
     .document-item .doc-linked { margin: 0.5rem 0; }
-    .document-item .doc-linked .link-chip { display: inline-flex; align-items: center; gap: 0.25rem; margin: 0.2rem 0.2rem 0 0; padding: 0.2rem 0.4rem; background: #e8f0fe; border-radius: 4px; font-size: 0.85rem; }
-    .document-item .doc-linked .link-chip .unlink-btn { background: none; border: none; cursor: pointer; color: #666; padding: 0 0.2rem; font-size: 0.9rem; }
-    .document-item .doc-link-form { display: flex; flex-wrap: wrap; gap: 0.25rem; align-items: center; margin-top: 0.5rem; font-size: 0.9rem; }
-    .document-item .doc-link-form select { padding: 0.25rem 0.5rem; }
+    .document-item .doc-linked .link-chip { display: inline-flex; align-items: center; gap: 0.25rem; margin: 0.2rem 0.2rem 0 0; padding: 0.25rem 0.5rem; background: rgba(37, 99, 235, 0.1); border-radius: var(--radius-sm); font-size: 0.85rem; }
+    .document-item .doc-linked .link-chip .unlink-btn { background: none; border: none; cursor: pointer; color: var(--text-secondary); padding: 0 0.2rem; font-size: 0.9rem; }
+    .document-item .doc-link-form { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-top: 0.5rem; font-size: 0.9rem; }
+    .document-item .doc-link-form select { padding: 0.35rem 0.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border); }
+    .para-linked-docs { margin-top: 0.5rem; font-size: 0.85rem; }
+    .para-linked-docs .doc-ref { display: inline-flex; align-items: center; gap: 0.25rem; margin: 0.2rem 0.2rem 0 0; padding: 0.25rem 0.5rem; background: rgba(37, 99, 235, 0.1); border-radius: var(--radius-sm); }
+    .para-linked-docs .doc-ref a { margin-right: 0.2rem; color: var(--accent); }
+    .para-linked-docs .doc-unlink { background: none; border: none; cursor: pointer; color: var(--text-secondary); padding: 0; font-size: 0.9rem; }
+    .para-link-doc-form { margin-top: 0.4rem; display: flex; gap: 0.25rem; align-items: center; flex-wrap: wrap; font-size: 0.85rem; }
+    .para-link-doc-form select { padding: 0.35rem 0.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border); }
   </style>
 </head>
 <body>
-  <h1>PARA Task Manager</h1>
-  <div class="view-toggle">
-    <button type="button" id="btn-active" class="active">Active (Projects & Areas)</button>
-    <button type="button" id="btn-reference">Reference (Resources & Archives)</button>
-    <button type="button" id="btn-documents">Documents</button>
-  </div>
+  <aside class="app-sidebar">
+    <div class="logo">PARA</div>
+    <nav>
+      <button type="button" id="btn-active" class="active">Active</button>
+      <button type="button" id="btn-reference">Reference</button>
+      <button type="button" id="btn-documents">Documents</button>
+    </nav>
+  </aside>
+  <main class="app-main">
+  <h1>Task Manager</h1>
 
   <div id="panel-active" class="panel visible">
     <div class="form-section">
@@ -74,6 +181,9 @@
       <h3>Create area</h3>
       <form id="form-area">
         <input type="text" id="area-title" placeholder="Area (e.g. Work, Health)" required>
+        <select id="area-project">
+          <option value="">— Top-level —</option>
+        </select>
         <button type="submit" class="primary">Add area</button>
       </form>
     </div>
@@ -115,7 +225,7 @@
     <div id="active-content">
       <div class="section-title">Projects</div>
       <div id="projects-list"></div>
-      <div class="section-title">Areas</div>
+      <div class="section-title">Top-level areas</div>
       <div id="areas-list"></div>
     </div>
   </div>
@@ -148,6 +258,7 @@
     <div id="archives-list"></div>
   </div>
 
+  </main>
   <script>
     const btnActive = document.getElementById('btn-active');
     const btnReference = document.getElementById('btn-reference');
@@ -184,18 +295,78 @@
       return div.innerHTML;
     }
 
-    function buildTaskLi(task) {
+    function buildParaLinkedDocs(linkedType, linkedId, linkedDocs, allDocs, onUnlink, onAddLink) {
+      const docs = linkedDocs || [];
+      const docsHtml = docs.map(d =>
+        `<span class="doc-ref"><a href="/documents/${d.id}" target="_blank" rel="noopener">${escapeHtml(d.original_name || d.filename)}</a>
+          <button type="button" class="doc-unlink" data-doc-id="${d.id}">×</button></span>`
+      ).join('');
+      const opts = allDocs.filter(d => !docs.some(x => x.id === d.id)).map(d =>
+        `<option value="${d.id}">${escapeHtml(d.original_name || d.filename)}</option>`
+      ).join('');
+      const div = document.createElement('div');
+      div.className = 'para-linked-docs-wrap';
+      div.innerHTML = `
+        <div class="para-linked-docs">${docsHtml || '<span class="doc-meta">No documents linked</span>'}</div>
+        <div class="para-link-doc-form">
+          <select class="para-doc-select"><option value="">Link document…</option>${opts}</select>
+          <button type="button" class="para-link-doc-btn">Link</button>
+        </div>
+      `;
+      div.querySelectorAll('.doc-unlink').forEach(btn => {
+        btn.addEventListener('click', () => onUnlink(parseInt(btn.dataset.docId, 10)));
+      });
+      const sel = div.querySelector('.para-doc-select');
+      div.querySelector('.para-link-doc-btn').addEventListener('click', () => {
+        const docId = parseInt(sel.value, 10);
+        if (!docId) return;
+        onAddLink(docId);
+      });
+      return div;
+    }
+
+    function buildTaskLi(task, paraDocMap, allDocs) {
       const li = document.createElement('div');
       li.className = 'task-item';
       li.dataset.id = task.id;
+      const linkedDocs = (paraDocMap && paraDocMap['task_' + task.id]) || [];
+      const pri = (task.priority || 'medium').toLowerCase();
       li.innerHTML = `
-        <span><strong>${escapeHtml(task.title)}</strong> <span class="priority">(${escapeHtml(task.priority || 'medium')})</span></span>
-        <button type="button" class="suggest-btn" data-id="${task.id}">When should I do this?</button>
-        <div class="suggestion" id="suggestion-${task.id}" style="display: none;"></div>
+        <div style="flex:1;min-width:0;">
+          <span class="priority-pill ${pri}">${escapeHtml(pri)}</span>
+          <span><strong>${escapeHtml(task.title)}</strong></span>
+          <button type="button" class="suggest-btn" data-id="${task.id}">When should I do this?</button>
+          <div class="suggestion" id="suggestion-${task.id}" style="display: none;"></div>
+        </div>
       `;
+      const linkedWrap = buildParaLinkedDocs('task', task.id, linkedDocs, allDocs || [],
+        (docId) => unlinkDocumentFromPara(docId, 'task', task.id, loadActive),
+        (docId) => linkDocumentToPara(docId, 'task', task.id, loadActive)
+      );
+      li.appendChild(linkedWrap);
       const box = li.querySelector('.suggestion');
       li.querySelector('.suggest-btn').addEventListener('click', () => fetchSuggestion(task.id, box));
       return li;
+    }
+
+    async function unlinkDocumentFromPara(docId, linkedType, linkedId, refresh) {
+      const res = await fetch(`/api/documents/${docId}/link`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ linked_type: linkedType, linked_id: linkedId })
+      });
+      if (!res.ok) return;
+      refresh();
+    }
+
+    async function linkDocumentToPara(docId, linkedType, linkedId, refresh) {
+      const res = await fetch(`/api/documents/${docId}/link`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ linked_type: linkedType, linked_id: linkedId })
+      });
+      if (!res.ok) { alert((await res.json()).detail || 'Could not add link'); return; }
+      refresh();
     }
 
     async function fetchSuggestion(taskId, boxEl) {
@@ -234,6 +405,17 @@
       return params.toString();
     }
 
+    function fillAreaProjectDropdown(projects) {
+      const sel = document.getElementById('area-project');
+      sel.innerHTML = '<option value="">— Top-level —</option>';
+      projects.forEach(p => {
+        const o = document.createElement('option');
+        o.value = p.id;
+        o.textContent = escapeHtml(p.title);
+        sel.appendChild(o);
+      });
+    }
+
     function fillParentDropdown(projects, areas) {
       const opt = document.createElement('option');
       opt.value = '';
@@ -249,7 +431,8 @@
       areas.forEach(a => {
         const o = document.createElement('option');
         o.value = `area:${a.id}`;
-        o.textContent = `Area: ${escapeHtml(a.title)}`;
+        const projectTitle = a.project_id ? (projects.find(p => p.id === a.project_id) || {}).title : '';
+        o.textContent = projectTitle ? `Area: ${escapeHtml(a.title)} (in ${escapeHtml(projectTitle)})` : `Area: ${escapeHtml(a.title)}`;
         taskParent.appendChild(o);
       });
     }
@@ -269,20 +452,38 @@
       areas.forEach(a => {
         const o = document.createElement('option');
         o.value = `area:${a.id}`;
-        o.textContent = `Area: ${escapeHtml(a.title)}`;
+        const projectTitle = a.project_id ? (projects.find(p => p.id === a.project_id) || {}).title : '';
+        o.textContent = projectTitle ? `Area: ${escapeHtml(a.title)} (in ${escapeHtml(projectTitle)})` : `Area: ${escapeHtml(a.title)}`;
         filterContainer.appendChild(o);
       });
     }
 
     async function loadActive() {
       const q = getTaskQuery();
-      const res = await fetch(`/api/tasks?${q}`);
-      const data = await res.json();
+      const [tasksRes, docsRes] = await Promise.all([
+        fetch(`/api/tasks?${q}`),
+        fetch('/api/documents')
+      ]);
+      const data = await tasksRes.json();
+      const docsData = await docsRes.json();
       const tasks = data.tasks || [];
       const projects = data.projects || [];
       const areas = data.areas || [];
+      const allDocs = docsData.documents || [];
+      fillAreaProjectDropdown(projects);
       fillParentDropdown(projects, areas);
       fillFilterContainer(projects, areas);
+
+      const paraDocMap = {};
+      await Promise.all(allDocs.map(async (d) => {
+        const r = await fetch(`/api/documents/${d.id}`);
+        const j = await r.json();
+        (j.linked || []).forEach(l => {
+          const key = l.linked_type + '_' + l.linked_id;
+          if (!paraDocMap[key]) paraDocMap[key] = [];
+          paraDocMap[key].push(d);
+        });
+      }));
 
       const projectsList = document.getElementById('projects-list');
       const areasList = document.getElementById('areas-list');
@@ -301,35 +502,84 @@
         }
       });
 
+      const nestedAreasByProject = {};
+      const topLevelAreas = [];
+      areas.forEach(a => {
+        if (a.project_id) {
+          if (!nestedAreasByProject[a.project_id]) nestedAreasByProject[a.project_id] = [];
+          nestedAreasByProject[a.project_id].push(a);
+        } else {
+          topLevelAreas.push(a);
+        }
+      });
+
       projects.forEach(p => {
         const card = document.createElement('div');
         card.className = 'container-card project';
+        const projectDocs = paraDocMap['project_' + p.id] || [];
+        const linkedSection = buildParaLinkedDocs('project', p.id, projectDocs, allDocs,
+          (docId) => unlinkDocumentFromPara(docId, 'project', p.id, loadActive),
+          (docId) => linkDocumentToPara(docId, 'project', p.id, loadActive)
+        );
         card.innerHTML = `
           <div class="container-header">
             <span class="container-title">${escapeHtml(p.title)}</span>
             <button type="button" class="archive-btn" data-type="project" data-id="${p.id}">Move to Archive</button>
           </div>
           <div class="container-meta">Goal: ${escapeHtml(p.goal || '')} · Deadline: ${escapeHtml(p.deadline || '')}</div>
+          <div class="para-linked-docs-container"></div>
+          <div class="project-nested-areas"></div>
           <div class="task-list" data-parent="project" data-id="${p.id}"></div>
         `;
+        card.querySelector('.para-linked-docs-container').appendChild(linkedSection);
+        const nestedContainer = card.querySelector('.project-nested-areas');
+        (nestedAreasByProject[p.id] || []).forEach(a => {
+          const areaCard = document.createElement('div');
+          areaCard.className = 'container-card area nested-area';
+          const areaDocs = paraDocMap['area_' + a.id] || [];
+          const areaLinkedSection = buildParaLinkedDocs('area', a.id, areaDocs, allDocs,
+            (docId) => unlinkDocumentFromPara(docId, 'area', a.id, loadActive),
+            (docId) => linkDocumentToPara(docId, 'area', a.id, loadActive)
+          );
+          areaCard.innerHTML = `
+            <div class="container-header">
+              <span class="container-title">${escapeHtml(a.title)}</span>
+              <button type="button" class="archive-btn" data-type="area" data-id="${a.id}">Move to Archive</button>
+            </div>
+            <div class="para-linked-docs-container"></div>
+            <div class="task-list" data-parent="area" data-id="${a.id}"></div>
+          `;
+          areaCard.querySelector('.para-linked-docs-container').appendChild(areaLinkedSection);
+          const areaList = areaCard.querySelector('.task-list');
+          (tasksByArea[a.id] || []).forEach(t => areaList.appendChild(buildTaskLi(t, paraDocMap, allDocs)));
+          areaCard.querySelector('.archive-btn').addEventListener('click', () => moveToArchive('area', a.id));
+          nestedContainer.appendChild(areaCard);
+        });
         const list = card.querySelector('.task-list');
-        (tasksByProject[p.id] || []).forEach(t => list.appendChild(buildTaskLi(t)));
+        (tasksByProject[p.id] || []).forEach(t => list.appendChild(buildTaskLi(t, paraDocMap, allDocs)));
         card.querySelector('.archive-btn').addEventListener('click', () => moveToArchive('project', p.id));
         projectsList.appendChild(card);
       });
 
-      areas.forEach(a => {
+      topLevelAreas.forEach(a => {
         const card = document.createElement('div');
         card.className = 'container-card area';
+        const areaDocs = paraDocMap['area_' + a.id] || [];
+        const linkedSection = buildParaLinkedDocs('area', a.id, areaDocs, allDocs,
+          (docId) => unlinkDocumentFromPara(docId, 'area', a.id, loadActive),
+          (docId) => linkDocumentToPara(docId, 'area', a.id, loadActive)
+        );
         card.innerHTML = `
           <div class="container-header">
             <span class="container-title">${escapeHtml(a.title)}</span>
             <button type="button" class="archive-btn" data-type="area" data-id="${a.id}">Move to Archive</button>
           </div>
+          <div class="para-linked-docs-container"></div>
           <div class="task-list" data-parent="area" data-id="${a.id}"></div>
         `;
+        card.querySelector('.para-linked-docs-container').appendChild(linkedSection);
         const list = card.querySelector('.task-list');
-        (tasksByArea[a.id] || []).forEach(t => list.appendChild(buildTaskLi(t)));
+        (tasksByArea[a.id] || []).forEach(t => list.appendChild(buildTaskLi(t, paraDocMap, allDocs)));
         card.querySelector('.archive-btn').addEventListener('click', () => moveToArchive('area', a.id));
         areasList.appendChild(card);
       });
@@ -383,10 +633,27 @@
             <span class="container-title">${typeLabel}: ${escapeHtml(ar.title)}</span>
             <span class="container-meta">${escapeHtml(ar.archived_at || '')}${meta}</span>
           </div>
-          <div class="archived-tasks"></div>
+          <div class="archived-content">
+            <div class="archived-areas"></div>
+            <div class="archived-tasks"></div>
+          </div>
         `;
+        const areasEl = div.querySelector('.archived-areas');
+        const hasAreas = ar.type === 'project' && (ar.areas || []).length > 0;
+        if (hasAreas) {
+          (ar.areas || []).forEach(areaSnap => {
+            const areaRow = document.createElement('div');
+            areaRow.className = 'archived-area-block';
+            areaRow.innerHTML = `<strong>${escapeHtml(areaSnap.title)}</strong>`;
+            (areaSnap.tasks || []).forEach(t => {
+              areaRow.appendChild(document.createElement('div')).textContent = `  ${escapeHtml(t.title)} (${t.priority || 'medium'})`;
+            });
+            areasEl.appendChild(areaRow);
+          });
+        }
         const tasksEl = div.querySelector('.archived-tasks');
-        (ar.tasks || []).forEach(t => {
+        const tasksToShow = hasAreas ? (ar.tasks || []).filter(t => t.parent_type === 'project') : (ar.tasks || []);
+        tasksToShow.forEach(t => {
           tasksEl.appendChild(document.createElement('div')).textContent = `${escapeHtml(t.title)} (${t.priority || 'medium'})`;
         });
         div.querySelector('.container-header').addEventListener('click', () => div.classList.toggle('expanded'));
@@ -534,14 +801,23 @@
     document.getElementById('form-area').addEventListener('submit', async (e) => {
       e.preventDefault();
       const title = document.getElementById('area-title').value.trim();
+      const projectIdVal = document.getElementById('area-project').value;
       if (!title) return;
+      const body = { title };
+      if (projectIdVal) body.project_id = parseInt(projectIdVal, 10);
       const res = await fetch('/api/areas', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title })
+        body: JSON.stringify(body)
       });
+      const data = await res.json();
+      if (data.error) {
+        alert(data.error);
+        return;
+      }
       if (!res.ok) return;
       e.target.reset();
+      document.getElementById('area-project').innerHTML = '<option value="">— Top-level —</option>';
       loadActive();
     });
 
