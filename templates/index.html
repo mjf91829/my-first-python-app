@@ -65,7 +65,6 @@
         <div class="suggestion" id="suggestion-${task.id}" style="display: none;"></div>
       `;
       list.appendChild(li);
-      li.querySelector('.suggest-btn').addEventListener('click', () => fetchSuggestion(task.id, li));
       form.reset();
     });
 
