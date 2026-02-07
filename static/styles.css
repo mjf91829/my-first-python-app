@@ -72,15 +72,39 @@ h1 { font-size: 1.75rem; font-weight: 700; margin: 0 0 1.5rem; color: var(--text
 .panel { display: none; }
 .panel.visible { display: block; }
 
-.filters { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.5rem; align-items: center; }
+.add-buttons-row { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; }
+
+.add-buttons-row button { margin: 0; }
+
+.form-section { margin-bottom: 1.5rem; }
+
+.form-section.collapsed { display: none; }
+
+.form-section h3 { font-size: 0.9rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-secondary); }
+
+.filters-wrapper { margin-bottom: 1.5rem; }
+
+.filters-toggle {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  margin-bottom: 0.5rem;
+}
+
+.filters-toggle:hover { background: rgba(255, 255, 255, 0.1); color: var(--text-primary); }
+
+.filters { display: flex; gap: 1rem; flex-wrap: wrap; align-items: center; }
+
+.filters.collapsed { display: none; }
 
 .filters label { font-size: 0.875rem; font-weight: 500; color: var(--text-secondary); }
 
 .filters select { padding: 0.5rem 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border); font-size: 0.875rem; background: rgba(52, 73, 94, 0.8); color: var(--text-primary); }
-
-.form-section { margin-bottom: 1.5rem; }
-
-.form-section h3 { font-size: 0.9rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-secondary); }
 
 form { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.5rem; align-items: flex-end; }
 

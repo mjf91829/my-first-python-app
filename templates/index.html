@@ -59,16 +59,22 @@
   </div>
 
   <div id="panel-active" class="panel">
-    <div class="form-section">
+    <div class="add-buttons-row">
+      <button type="button" id="btn-add-project">Add project</button>
+      <button type="button" id="btn-add-area">Add area</button>
+      <button type="button" id="btn-add-task">Add task</button>
+    </div>
+    <div class="form-section collapsed" data-create-type="project" id="form-section-project">
       <h3>Create project</h3>
       <form id="form-project">
         <input type="text" id="project-title" placeholder="Title" required>
         <input type="text" id="project-goal" placeholder="Goal" required>
         <input type="date" id="project-deadline" required>
         <button type="submit" class="primary">Add project</button>
+        <button type="button" class="btn-cancel-create">Cancel</button>
       </form>
     </div>
-    <div class="form-section">
+    <div class="form-section collapsed" data-create-type="area" id="form-section-area">
       <h3>Create area</h3>
       <form id="form-area">
         <input type="text" id="area-title" placeholder="Area (e.g. Work, Health)" required>
@@ -76,9 +82,10 @@
           <option value="">— Top-level —</option>
         </select>
         <button type="submit" class="primary">Add area</button>
+        <button type="button" class="btn-cancel-create">Cancel</button>
       </form>
     </div>
-    <div class="form-section">
+    <div class="form-section collapsed" data-create-type="task" id="form-section-task">
       <h3>Add task</h3>
       <form id="form-task">
         <input type="text" id="task-title" placeholder="Task name" required>
@@ -91,9 +98,12 @@
           <option value="">Select project or area</option>
         </select>
         <button type="submit" class="primary">Add task</button>
+        <button type="button" class="btn-cancel-create">Cancel</button>
       </form>
     </div>
-    <div class="filters">
+    <div class="filters-wrapper">
+      <button type="button" id="filters-toggle" class="filters-toggle" aria-expanded="false">Filters</button>
+      <div class="filters collapsed" id="filters-row">
       <label>Show:</label>
       <select id="filter-completed">
         <option value="">All</option>
@@ -118,6 +128,7 @@
         <option value="priority">Priority</option>
         <option value="title">Title</option>
       </select>
+      </div>
     </div>
     <div id="active-content">
       <div class="section-title">Projects</div>
@@ -229,6 +240,34 @@
     const filterPriority = document.getElementById('filter-priority');
     const filterCompleted = document.getElementById('filter-completed');
     const sortBy = document.getElementById('sort-by');
+
+    function showCreateForm(type) {
+      document.querySelectorAll('#panel-active .form-section[data-create-type]').forEach(function(section) {
+        section.classList.toggle('collapsed', type === null || section.dataset.createType !== type);
+      });
+    }
+
+    document.getElementById('btn-add-project').addEventListener('click', function() { showCreateForm('project'); });
+    document.getElementById('btn-add-area').addEventListener('click', function() { showCreateForm('area'); });
+    document.getElementById('btn-add-task').addEventListener('click', function() { showCreateForm('task'); });
+    document.querySelectorAll('.btn-cancel-create').forEach(function(btn) {
+      btn.addEventListener('click', function() { showCreateForm(null); });
+    });
+
+    (function initFiltersToggle() {
+      var filtersRow = document.getElementById('filters-row');
+      var filtersToggle = document.getElementById('filters-toggle');
+      var storageKey = 'paraTaskManagerFiltersExpanded';
+      var expanded = localStorage.getItem(storageKey) === 'true';
+      filtersRow.classList.toggle('collapsed', !expanded);
+      filtersToggle.setAttribute('aria-expanded', expanded);
+      filtersToggle.addEventListener('click', function() {
+        filtersRow.classList.toggle('collapsed');
+        expanded = !filtersRow.classList.contains('collapsed');
+        filtersToggle.setAttribute('aria-expanded', expanded);
+        localStorage.setItem(storageKey, expanded);
+      });
+    })();
 
     function setView(view) {
       const isDashboard = view === 'dashboard';
@@ -1189,6 +1228,7 @@
       });
       if (!res.ok) return;
       e.target.reset();
+      showCreateForm(null);
       loadActive();
     });
 
@@ -1212,6 +1252,7 @@
       if (!res.ok) return;
       e.target.reset();
       document.getElementById('area-project').innerHTML = '<option value="">— Top-level —</option>';
+      showCreateForm(null);
       loadActive();
     });
 
@@ -1234,6 +1275,7 @@
       }
       if (!res.ok) return;
       e.target.reset();
+      showCreateForm(null);
       const newTaskId = data.id;
       loadActive().then(() => {
         showToast('Task added!', 'success');
