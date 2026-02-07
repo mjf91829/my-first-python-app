@@ -747,7 +747,12 @@
     document.querySelector('.back-link').addEventListener('click', async (e) => {
       e.preventDefault();
       if (dirty || saveStatus === 'error') {
-        await performSave();
+        try {
+          await performSave();
+        } catch (err) {
+          updateSaveIndicator();
+          return;
+        }
         dirty = false;
         saveStatus = 'saved';
         updateSaveIndicator();
@@ -784,8 +789,23 @@
       }
     });
 
+    function sendSaveKeepalive() {
+      try {
+        fetch(`/api/documents/${DOC_ID}/markups`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            linked_type: currentLinkedType,
+            linked_id: currentLinkedId,
+            markups: markups,
+          }),
+          keepalive: true,
+        });
+      } catch (err) { /* ignore */ }
+    }
     window.addEventListener('beforeunload', (e) => {
       if (dirty || saveStatus === 'saving' || saveStatus === 'error') {
+        if (dirty) sendSaveKeepalive();
         e.preventDefault();
       }
     });
@@ -799,6 +819,10 @@
 
     updateToolbarForMode();
     updateZoomDisplay();
+    // Load PDF with PDF.js so annotation layer exists and markups can be added/saved
+    whenPdfJsReady().then(function () {
+      if (typeof pdfjsLib !== 'undefined') loadPdf();
+    }).catch(function () { showIframeFallback(); });
   </script>
 </body>
 </html>
