@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Task Manager</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; max-width: 560px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { margin-bottom: 1.5rem; }
+    form { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
+    input[type="text"] { flex: 1; min-width: 180px; padding: 0.5rem; }
+    select { padding: 0.5rem; }
+    button { padding: 0.5rem 1rem; cursor: pointer; }
+    ul { list-style: none; padding: 0; margin: 0; }
+    li { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; padding: 0.6rem; border: 1px solid #ddd; border-radius: 6px; margin-bottom: 0.5rem; }
+    li .priority { font-size: 0.85rem; text-transform: uppercase; margin-left: 0.25rem; }
+    .suggest-btn { font-size: 0.85rem; margin-left: auto; }
+    .suggestion { width: 100%; margin-top: 0.25rem; padding: 0.5rem; background: #f0f7ff; border-radius: 4px; font-size: 0.9rem; }
+    .error { color: #c00; }
+  </style>
+</head>
+<body>
+  <h1>Task Manager</h1>
+  <form id="task-form">
+    <input type="text" id="title" name="title" placeholder="Task name" required>
+    <select id="priority" name="priority">
+      <option value="high">High</option>
+      <option value="medium" selected>Medium</option>
+      <option value="low">Low</option>
+    </select>
+    <button type="submit">Add task</button>
+  </form>
+  <h2>Tasks</h2>
+  <ul id="task-list">
+    {% for task in tasks %}
+    <li data-id="{{ task.id }}">
+      <span><strong>{{ task.title }}</strong><span class="priority">({{ task.priority }})</span></span>
+      <button type="button" class="suggest-btn" data-id="{{ task.id }}">When should I do this?</button>
+      <div class="suggestion" id="suggestion-{{ task.id }}" style="display: none;"></div>
+    </li>
+    {% endfor %}
+  </ul>
+  <script>
+    const form = document.getElementById('task-form');
+    const list = document.getElementById('task-list');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const title = document.getElementById('title').value.trim();
+      const priority = document.getElementById('priority').value;
+      if (!title) return;
+      const res = await fetch('/api/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, priority })
+      });
+      if (!res.ok) return;
+      const task = await res.json();
+      const li = document.createElement('li');
+      li.dataset.id = task.id;
+      li.innerHTML = `
+        <span><strong>${escapeHtml(task.title)}</strong><span class="priority">(${task.priority})</span></span>
+        <button type="button" class="suggest-btn" data-id="${task.id}">When should I do this?</button>
+        <div class="suggestion" id="suggestion-${task.id}" style="display: none;"></div>
+      `;
+      list.appendChild(li);
+      li.querySelector('.suggest-btn').addEventListener('click', () => fetchSuggestion(task.id, li));
+      form.reset();
+    });
+
+    list.addEventListener('click', (e) => {
+      if (e.target.classList.contains('suggest-btn')) {
+        const id = parseInt(e.target.dataset.id, 10);
+        const li = e.target.closest('li');
+        fetchSuggestion(id, li);
+      }
+    });
+
+    async function fetchSuggestion(taskId, li) {
+      const box = li.querySelector('.suggestion');
+      box.style.display = 'block';
+      box.textContent = 'Loading…';
+      box.classList.remove('error');
+      try {
+        const res = await fetch(`/api/tasks/${taskId}/suggest`);
+        const data = await res.json();
+        if (data.error) {
+          box.textContent = data.error;
+          box.classList.add('error');
+        } else {
+          box.textContent = data.suggestion;
+        }
+      } catch (err) {
+        box.textContent = 'Could not get suggestion.';
+        box.classList.add('error');
+      }
+    }
+
+    function escapeHtml(s) {
+      const div = document.createElement('div');
+      div.textContent = s;
+      return div.innerHTML;
+    }
+  </script>
+</body>
+</html>
