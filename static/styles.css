@@ -135,7 +135,7 @@ button {
   font-size: 0.875rem;
   font-weight: 500;
   font-family: inherit;
-  transition: background 0.15s, border-color 0.15s;
+  transition: all 0.2s ease;
   color: var(--text-primary);
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid var(--border);
@@ -164,7 +164,7 @@ ul { list-style: none; padding: 0; margin: 0; }
   padding: 1.5rem;
   margin-bottom: 1rem;
   box-shadow: var(--shadow-card);
-  transition: box-shadow 0.2s;
+  transition: all 0.2s ease;
 }
 
 .container-card:hover { box-shadow: var(--shadow-card-hover); }
@@ -195,6 +195,13 @@ ul { list-style: none; padding: 0; margin: 0; }
   border-radius: var(--radius-md);
   margin-bottom: 0.5rem;
   background: rgba(52, 73, 94, 0.5);
+  transition: all 0.2s ease;
+}
+
+.task-item:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-card-hover);
 }
 
 .task-item .priority-pill {
@@ -240,6 +247,7 @@ ul { list-style: none; padding: 0; margin: 0; }
   margin-bottom: 0.75rem;
   background: var(--bg-card);
   box-shadow: var(--shadow-card);
+  transition: all 0.2s ease;
 }
 
 .archive-item .archived-content { margin-top: 0.75rem; padding-left: 0.75rem; font-size: 0.875rem; display: none; color: var(--text-secondary); }
@@ -255,6 +263,7 @@ ul { list-style: none; padding: 0; margin: 0; }
   margin-bottom: 0.75rem;
   background: var(--bg-card);
   box-shadow: var(--shadow-card);
+  transition: all 0.2s ease;
 }
 
 .document-item .doc-name { font-weight: 600; }
@@ -311,6 +320,7 @@ ul { list-style: none; padding: 0; margin: 0; }
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-card);
   border-left: 4px solid var(--accent);
+  transition: all 0.2s ease;
 }
 
 .stat-value { display: block; font-size: 2rem; font-weight: 700; color: var(--accent); }
@@ -336,6 +346,18 @@ ul { list-style: none; padding: 0; margin: 0; }
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   font-size: 0.9rem;
+  transition: all 0.2s ease;
+}
+
+.dashboard-task-item:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-card-hover);
+}
+
+.dashboard-task-item.task-completed .task-title {
+  text-decoration: line-through;
+  opacity: 0.7;
 }
 
 .dashboard-project-item { border-left: 4px solid var(--accent); }
@@ -376,6 +398,59 @@ ul { list-style: none; padding: 0; margin: 0; }
 .task-item .task-item-row { display: flex; align-items: flex-start; gap: 0.5rem; width: 100%; }
 
 .task-item .task-item-row .task-item-content { flex: 1; min-width: 0; }
+
+.task-item .task-title {
+  transition: opacity 0.3s ease;
+}
+
+.task-item.task-completed .task-title {
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
+.task-item.task-completed:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-card-hover);
+}
+
+.task-item.task-item-new {
+  border-color: var(--success);
+  box-shadow: 0 0 0 2px rgba(39, 174, 96, 0.3);
+}
+
+/* Fun Complete button - rewarding success style */
+button.btn-complete {
+  background: var(--success);
+  color: #fff;
+  border: none;
+  padding: 0.4rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(39, 174, 96, 0.35);
+}
+
+button.btn-complete:hover {
+  background: #2ecc71;
+  transform: scale(1.05);
+  box-shadow: 0 3px 12px rgba(39, 174, 96, 0.45);
+}
+
+button.btn-complete:active {
+  transform: scale(0.98);
+}
+
+button.btn-complete.is-completed {
+  background: rgba(255, 255, 255, 0.15);
+  color: var(--text-secondary);
+  box-shadow: none;
+}
+
+button.btn-complete.is-completed:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: var(--text-primary);
+}
 
 .row-menu-trigger {
   flex-shrink: 0;
@@ -463,3 +538,76 @@ ul { list-style: none; padding: 0; margin: 0; }
   background: rgba(52, 73, 94, 0.8);
   color: var(--text-primary);
 }
+
+/* Skeleton loader */
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--border) 25%,
+    rgba(255, 255, 255, 0.08) 50%,
+    var(--border) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.2s ease-in-out infinite;
+  border-radius: var(--radius-md);
+}
+
+.skeleton-stat {
+  height: 4rem;
+  border-radius: var(--radius-lg);
+}
+
+.skeleton-card {
+  height: 5rem;
+  margin-bottom: 0.75rem;
+  border-radius: var(--radius-lg);
+}
+
+.skeleton-task-row {
+  height: 3rem;
+  margin-bottom: 0.5rem;
+  border-radius: var(--radius-md);
+}
+
+.panel-content-loading .panel-content-real {
+  display: none;
+}
+
+.panel-content-loading .panel-content-skeleton {
+  display: block;
+}
+
+.panel-content-skeleton {
+  display: none;
+}
+
+/* Toast for dopamine feedback */
+.toast {
+  position: fixed;
+  bottom: 1.5rem;
+  left: 50%;
+  transform: translateX(-50%) translateY(100px);
+  padding: 0.75rem 1.25rem;
+  background: var(--bg-card-solid);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  font-size: 0.9rem;
+  color: var(--text-primary);
+  z-index: 300;
+  opacity: 0;
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.toast.visible {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+}
+
+.toast.success { border-left: 4px solid var(--success); }
+.toast.highlight { border-left: 4px solid var(--accent); }

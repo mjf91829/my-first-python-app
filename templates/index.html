@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script type="application/json" id="dashboard-preload">{{ dict(projects=projects, areas=areas, tasks=tasks) | tojson }}</script>
   <aside class="app-sidebar">
     <div class="logo">PARA</div>
@@ -93,6 +94,12 @@
       </form>
     </div>
     <div class="filters">
+      <label>Show:</label>
+      <select id="filter-completed">
+        <option value="">All</option>
+        <option value="false">Active only</option>
+        <option value="true">Completed only</option>
+      </select>
       <label>Filter priority:</label>
       <select id="filter-priority">
         <option value="">All</option>
@@ -220,6 +227,7 @@
     const taskParent = document.getElementById('task-parent');
     const filterContainer = document.getElementById('filter-container');
     const filterPriority = document.getElementById('filter-priority');
+    const filterCompleted = document.getElementById('filter-completed');
     const sortBy = document.getElementById('sort-by');
 
     function setView(view) {
@@ -242,7 +250,30 @@
       else if (isDocuments) loadDocuments();
     }
 
+    function getDashboardSkeletonHtml() {
+      return (
+        '<div class="skeleton skeleton-stat"></div><div class="skeleton skeleton-stat"></div><div class="skeleton skeleton-stat"></div>'
+      );
+    }
+
     async function loadDashboard() {
+      const projectsEl = document.getElementById('dashboard-projects');
+      const tasksEl = document.getElementById('dashboard-tasks');
+      const areasEl = document.getElementById('dashboard-areas');
+      const statsEl = document.getElementById('panel-dashboard').querySelector('.dashboard-stats');
+      if (statsEl) {
+        const statCards = statsEl.querySelectorAll('.stat-card');
+        statCards.forEach(card => {
+          const val = card.querySelector('.stat-value');
+          if (val) {
+            val.style.opacity = '0.3';
+            val.textContent = '—';
+          }
+        });
+      }
+      projectsEl.innerHTML = '<div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div>';
+      tasksEl.innerHTML = '<div class="skeleton skeleton-task-row"></div><div class="skeleton skeleton-task-row"></div><div class="skeleton skeleton-task-row"></div>';
+      areasEl.innerHTML = '<span class="skeleton" style="display:inline-block;width:120px;height:2rem;border-radius:999px;"></span><span class="skeleton" style="display:inline-block;width:90px;height:2rem;border-radius:999px;margin-left:0.5rem;"></span>';
       try {
         const res = await fetch('/api/tasks');
         const data = await res.json();
@@ -253,6 +284,9 @@
         console.warn('Dashboard refresh failed, using existing preload:', e);
       }
       renderDashboard();
+      if (statsEl) {
+        statsEl.querySelectorAll('.stat-value').forEach(v => { v.style.opacity = ''; });
+      }
     }
 
     function renderDashboard() {
@@ -287,9 +321,10 @@
       const displayTasks = sortedTasks.slice(0, 8);
       displayTasks.forEach(t => {
         const div = document.createElement('div');
-        div.className = 'dashboard-task-item';
+        const isCompleted = !!t.completed;
+        div.className = 'dashboard-task-item' + (isCompleted ? ' task-completed' : '');
         const pri = (t.priority || 'medium').toLowerCase();
-        div.innerHTML = `<span class="priority-pill ${pri}">${pri}</span>${escapeHtml(t.title || '')}`;
+        div.innerHTML = `<span class="priority-pill ${pri}">${pri}</span><span class="task-title">${escapeHtml(t.title || '')}</span>`;
         tasksEl.appendChild(div);
       });
       if (displayTasks.length === 0) {
@@ -361,6 +396,7 @@
       document.getElementById('modal-edit-task').classList.remove('visible');
       currentEditTaskId = null;
       loadActive();
+      showToast('Saved!', 'highlight');
     });
 
     document.getElementById('move-task-cancel').addEventListener('click', () => {
@@ -437,9 +473,20 @@
       return div;
     }
 
+    function showToast(message, type) {
+      const el = document.getElementById('toast');
+      el.textContent = message;
+      el.className = 'toast visible ' + (type || '');
+      clearTimeout(showToast._t);
+      showToast._t = setTimeout(() => {
+        el.classList.remove('visible');
+      }, 2500);
+    }
+
     function buildTaskLi(task, paraDocMap, allDocs) {
       const li = document.createElement('div');
-      li.className = 'task-item';
+      const isCompleted = !!task.completed;
+      li.className = 'task-item' + (isCompleted ? ' task-completed' : '');
       li.dataset.id = task.id;
       const linkedDocs = (paraDocMap && paraDocMap['task_' + task.id]) || [];
       const pri = (task.priority || 'medium').toLowerCase();
@@ -447,10 +494,11 @@
         <div class="task-item-row">
           <div class="task-item-content">
             <span class="priority-pill ${pri}">${escapeHtml(pri)}</span>
-            <span><strong>${escapeHtml(task.title)}</strong></span>
+            <span class="task-title"><strong>${escapeHtml(task.title)}</strong></span>
             <button type="button" class="suggest-btn" data-id="${task.id}">When should I do this?</button>
             <div class="suggestion" id="suggestion-${task.id}" style="display: none;"></div>
           </div>
+          <button type="button" class="btn-complete ${isCompleted ? 'is-completed' : ''}" data-task-id="${task.id}" aria-label="${isCompleted ? 'Mark incomplete' : 'Complete task'}">${isCompleted ? 'Undo' : '✓ Done'}</button>
           <button type="button" class="row-menu-trigger" aria-label="Row actions">&#8942;</button>
           <div class="row-menu-dropdown" data-task-id="${task.id}">
             <button type="button" class="row-menu-item" data-action="share">Share</button>
@@ -496,7 +544,66 @@
           else if (action === 'move') openMoveTaskModal(task);
         });
       });
+      const completeBtn = li.querySelector('.btn-complete');
+      completeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (task.completed) {
+          undoCompleteTask(task.id, li, completeBtn);
+        } else {
+          completeTask(task.id, li, completeBtn);
+        }
+      });
       return li;
+    }
+
+    async function completeTask(taskId, liEl, btnEl) {
+      if (!liEl) liEl = document.querySelector(`.task-item[data-id="${taskId}"]`);
+      if (!btnEl) btnEl = liEl && liEl.querySelector('.btn-complete');
+      liEl && liEl.classList.add('task-completed');
+      btnEl && (btnEl.textContent = 'Undo');
+      btnEl && btnEl.classList.add('is-completed');
+      try {
+        const res = await fetch(`/api/tasks/${taskId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ completed: true })
+        });
+        if (!res.ok) {
+          liEl && liEl.classList.remove('task-completed');
+          btnEl && (btnEl.textContent = '✓ Done');
+          btnEl && btnEl.classList.remove('is-completed');
+          return;
+        }
+        showToast('Done!', 'success');
+      } catch (e) {
+        liEl && liEl.classList.remove('task-completed');
+        btnEl && (btnEl.textContent = '✓ Done');
+        btnEl && btnEl.classList.remove('is-completed');
+      }
+    }
+
+    async function undoCompleteTask(taskId, liEl, btnEl) {
+      if (!liEl) liEl = document.querySelector(`.task-item[data-id="${taskId}"]`);
+      if (!btnEl) btnEl = liEl && liEl.querySelector('.btn-complete');
+      liEl && liEl.classList.remove('task-completed');
+      btnEl && (btnEl.textContent = '✓ Done');
+      btnEl && btnEl.classList.remove('is-completed');
+      try {
+        const res = await fetch(`/api/tasks/${taskId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ completed: false })
+        });
+        if (!res.ok) {
+          liEl && liEl.classList.add('task-completed');
+          btnEl && (btnEl.textContent = 'Undo');
+          btnEl && btnEl.classList.add('is-completed');
+        }
+      } catch (e) {
+        liEl && liEl.classList.add('task-completed');
+        btnEl && (btnEl.textContent = 'Undo');
+        btnEl && btnEl.classList.add('is-completed');
+      }
     }
 
     async function unlinkDocumentFromPara(docId, linkedType, linkedId, refresh) {
@@ -661,6 +768,9 @@
       const params = new URLSearchParams();
       const priority = filterPriority.value;
       const sort = sortBy.value;
+      const completedVal = filterCompleted && filterCompleted.value;
+      if (completedVal === 'true') params.set('completed', 'true');
+      else if (completedVal === 'false') params.set('completed', 'false');
       if (priority) params.set('priority', priority);
       if (sort) params.set('sort', sort);
       const containerVal = filterContainer.value;
@@ -727,7 +837,19 @@
       });
     }
 
+    function getActiveSkeletonHtml() {
+      return (
+        '<div class="container-card project"><div class="skeleton skeleton-card" style="margin-bottom:0.5rem;"></div><div class="skeleton skeleton-task-row"></div><div class="skeleton skeleton-task-row"></div></div>' +
+        '<div class="container-card area"><div class="skeleton skeleton-card" style="margin-bottom:0.5rem;"></div><div class="skeleton skeleton-task-row"></div></div>'
+      );
+    }
+
     async function loadActive() {
+      const projectsList = document.getElementById('projects-list');
+      const areasList = document.getElementById('areas-list');
+      projectsList.innerHTML = getActiveSkeletonHtml();
+      areasList.innerHTML = '<div class="container-card area"><div class="skeleton skeleton-card"></div></div>';
+
       const q = getTaskQuery();
       const [tasksRes, docsRes] = await Promise.all([
         fetch(`/api/tasks?${q}`),
@@ -754,8 +876,6 @@
         });
       }));
 
-      const projectsList = document.getElementById('projects-list');
-      const areasList = document.getElementById('areas-list');
       projectsList.innerHTML = '';
       areasList.innerHTML = '';
 
@@ -869,6 +989,11 @@
     }
 
     async function loadReference() {
+      const resourcesList = document.getElementById('resources-list');
+      const archivesList = document.getElementById('archives-list');
+      resourcesList.innerHTML = '<div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div>';
+      archivesList.innerHTML = '<div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div>';
+
       const [tasksRes, resourcesRes, archivesRes] = await Promise.all([
         fetch('/api/tasks'),
         fetch('/api/resources'),
@@ -877,7 +1002,6 @@
       const resources = (await resourcesRes.json()).resources || [];
       const archives = (await archivesRes.json()).archives || [];
 
-      const resourcesList = document.getElementById('resources-list');
       resourcesList.innerHTML = '';
       resources.forEach(r => {
         const div = document.createElement('div');
@@ -890,7 +1014,6 @@
         resourcesList.appendChild(div);
       });
 
-      const archivesList = document.getElementById('archives-list');
       archivesList.innerHTML = '';
       archives.forEach(ar => {
         const div = document.createElement('div');
@@ -931,6 +1054,9 @@
     }
 
     async function loadDocuments() {
+      const documentsList = document.getElementById('documents-list');
+      documentsList.innerHTML = '<div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div>';
+
       const [docsRes, tasksRes] = await Promise.all([
         fetch('/api/documents'),
         fetch('/api/tasks')
@@ -942,7 +1068,6 @@
       const areas = tasksData.areas || [];
       const tasks = tasksData.tasks || [];
 
-      const documentsList = document.getElementById('documents-list');
       documentsList.innerHTML = '';
       for (const doc of docs) {
         const detailRes = await fetch(`/api/documents/${doc.id}`);
@@ -1109,7 +1234,15 @@
       }
       if (!res.ok) return;
       e.target.reset();
-      loadActive();
+      const newTaskId = data.id;
+      loadActive().then(() => {
+        showToast('Task added!', 'success');
+        const newRow = document.querySelector(`.task-item[data-id="${newTaskId}"]`);
+        if (newRow) {
+          newRow.classList.add('task-item-new');
+          setTimeout(() => newRow.classList.remove('task-item-new'), 2000);
+        }
+      });
     });
 
     document.getElementById('form-resource').addEventListener('submit', async (e) => {
@@ -1130,6 +1263,7 @@
     filterPriority.addEventListener('change', loadActive);
     filterContainer.addEventListener('change', loadActive);
     sortBy.addEventListener('change', loadActive);
+    if (filterCompleted) filterCompleted.addEventListener('change', loadActive);
 
     renderDashboard();
   </script>

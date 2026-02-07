@@ -69,6 +69,7 @@ class TaskUpdate(BaseModel):
     priority: Literal["high", "medium", "low"] | None = None
     parent_type: Literal["project", "area"] | None = None
     parent_id: int | None = None
+    completed: bool | None = None
 
 
 class ArchiveMoveBody(BaseModel):
@@ -263,6 +264,7 @@ async def get_tasks(
     parent_id: int | None = None,
     priority: str | None = None,
     sort: str | None = None,
+    completed: bool | None = None,
 ):
     data = load_data()
     tasks = list(data["tasks"])
@@ -274,6 +276,8 @@ async def get_tasks(
         tasks = [t for t in tasks if t.get("parent_id") == parent_id]
     if priority:
         tasks = [t for t in tasks if (t.get("priority") or "medium").lower() == priority.lower()]
+    if completed is not None:
+        tasks = [t for t in tasks if t.get("completed", False) == completed]
     if sort == "deadline":
         def deadline_key(t):
             pt, pid = t.get("parent_type"), t.get("parent_id")
@@ -305,6 +309,7 @@ async def create_task(task: TaskCreate):
         "priority": task.priority or "medium",
         "parent_type": task.parent_type,
         "parent_id": task.parent_id,
+        "completed": False,
     }
     data["tasks"].append(new_task)
     save_data(data)
@@ -334,6 +339,12 @@ async def update_task(task_id: int, body: TaskUpdate):
         task["parent_id"] = body.parent_id
     elif body.parent_type is not None or body.parent_id is not None:
         raise HTTPException(status_code=400, detail="Must provide both parent_type and parent_id")
+    if body.completed is not None:
+        task["completed"] = body.completed
+        if body.completed:
+            task["completed_at"] = datetime.now(timezone.utc).isoformat()
+        else:
+            task.pop("completed_at", None)
     save_data(data)
     return task
 
