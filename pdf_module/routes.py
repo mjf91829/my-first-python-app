@@ -45,7 +45,16 @@ async def serve_document_file(doc_id: int):
         raise HTTPException(status_code=404, detail="Document not found")
     doc = service.get_document(doc_id)
     filename = doc.get("original_name", doc.get("filename", "document.pdf"))
-    return FileResponse(path, media_type="application/pdf", filename=filename)
+    # Strip control characters (incl. \r, \n) to prevent header injection
+    safe_filename = "".join(c for c in filename if ord(c) >= 32 and ord(c) != 127)
+    if not safe_filename:
+        safe_filename = "document.pdf"
+    safe_filename = safe_filename.replace("\\", "\\\\").replace('"', '\\"')
+    return FileResponse(
+        path,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{safe_filename}"'},
+    )
 
 
 @router.delete("/documents/{doc_id}")

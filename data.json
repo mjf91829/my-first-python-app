@@ -9,59 +9,66 @@
   ],
   "areas": [
     {
-      "id": 1,
-      "title": "Inbox"
-    },
-    {
       "id": 2,
       "title": "Work"
     }
   ],
   "resources": [],
-  "archives": [],
-  "tasks": [
+  "archives": [
     {
       "id": 1,
-      "title": "Test 1",
-      "priority": "medium",
-      "parent_type": "area",
-      "parent_id": 1
-    },
-    {
-      "id": 2,
-      "title": "Get groceries",
-      "priority": "medium",
-      "parent_type": "area",
-      "parent_id": 1
-    },
-    {
-      "id": 3,
-      "title": "get laid",
-      "priority": "medium",
-      "parent_type": "area",
-      "parent_id": 1
-    },
-    {
-      "id": 4,
-      "title": "1",
-      "priority": "medium",
-      "parent_type": "area",
-      "parent_id": 1
-    },
-    {
-      "id": 5,
-      "title": "Verify",
-      "priority": "medium",
-      "parent_type": "area",
-      "parent_id": 1
-    },
-    {
-      "id": 6,
-      "title": "Test",
-      "priority": "medium",
-      "parent_type": "area",
-      "parent_id": 1
-    },
+      "type": "area",
+      "title": "Inbox",
+      "goal": "",
+      "deadline": "",
+      "archived_at": "2026-02-07T19:53:30.934815+00:00",
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Test 1",
+          "priority": "medium",
+          "parent_type": "area",
+          "parent_id": 1
+        },
+        {
+          "id": 2,
+          "title": "Get groceries",
+          "priority": "medium",
+          "parent_type": "area",
+          "parent_id": 1
+        },
+        {
+          "id": 3,
+          "title": "get laid",
+          "priority": "medium",
+          "parent_type": "area",
+          "parent_id": 1
+        },
+        {
+          "id": 4,
+          "title": "1",
+          "priority": "medium",
+          "parent_type": "area",
+          "parent_id": 1
+        },
+        {
+          "id": 5,
+          "title": "Verify",
+          "priority": "medium",
+          "parent_type": "area",
+          "parent_id": 1
+        },
+        {
+          "id": 6,
+          "title": "Test",
+          "priority": "medium",
+          "parent_type": "area",
+          "parent_id": 1
+        }
+      ]
+    }
+  ],
+  "tasks": [
     {
       "id": 7,
       "title": "2",
@@ -73,11 +80,28 @@
   "documents": [
     {
       "id": 1,
-      "filename": "40042c180078_Death_House_Original.pdf",
-      "original_name": "Death House Original.pdf",
-      "uploaded_at": "2026-02-07T19:12:52.544027+00:00"
+      "filename": "a4ce0c4ab713_Zoltan.pdf",
+      "original_name": "Zoltan.pdf",
+      "uploaded_at": "2026-02-07T19:33:47.436726+00:00"
+    },
+    {
+      "id": 2,
+      "filename": "8b6de1027540_Death_House_Original1.pdf",
+      "original_name": "Death House Original1.pdf",
+      "uploaded_at": "2026-02-07T19:40:19.080958+00:00"
     }
   ],
-  "document_links": [],
+  "document_links": [
+    {
+      "document_id": 1,
+      "linked_type": "project",
+      "linked_id": 1
+    },
+    {
+      "document_id": 1,
+      "linked_type": "task",
+      "linked_id": 1
+    }
+  ],
   "document_markups": []
 }
