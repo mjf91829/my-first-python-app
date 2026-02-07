@@ -1,59 +1,82 @@
 """FastAPI PARA app: Projects, Areas, Resources, Archives; tasks as children of Project or Area."""
 
+import json
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from jinja2 import Environment, FileSystemLoader
+from pydantic import BaseModel, Field, field_validator
 
 from data_access import load_data, next_id, save_data
+from pdf_module import service
+from pdf_module.routes import router as pdf_router
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
+_JINJA_ENV: Environment | None = None
+
+
+def _get_jinja_env() -> Environment:
+    global _JINJA_ENV
+    if _JINJA_ENV is None:
+        _JINJA_ENV = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)))
+        _JINJA_ENV.filters["tojson"] = lambda v: json.dumps(v)
+    return _JINJA_ENV
+
 
 # Pydantic models
 class ProjectCreate(BaseModel):
-    title: str
-    goal: str
-    deadline: str
+    title: str = Field(..., max_length=500)
+    goal: str = Field(default="", max_length=500)
+    deadline: str = Field(default="", max_length=100)
 
 
 class AreaCreate(BaseModel):
-    title: str
+    title: str = Field(..., max_length=500)
     project_id: int | None = None
 
 
 class ResourceCreate(BaseModel):
-    title: str
-    url: str = ""
-    notes: str = ""
+    title: str = Field(..., max_length=500)
+    url: str = Field(default="", max_length=2000)
+    notes: str = Field(default="", max_length=500)
+
+    @field_validator("url")
+    @classmethod
+    def url_must_be_http_or_https(cls, v: str) -> str:
+        if not v:
+            return v
+        v = v.strip()
+        if not (v.startswith("http://") or v.startswith("https://")):
+            raise ValueError("URL must start with http:// or https://")
+        return v
 
 
 class TaskCreate(BaseModel):
-    title: str
-    priority: str = "medium"
-    parent_type: str
+    title: str = Field(..., max_length=500)
+    priority: Literal["high", "medium", "low"] = "medium"
+    parent_type: Literal["project", "area"]
     parent_id: int
 
 
 class TaskUpdate(BaseModel):
-    title: str | None = None
-    priority: str | None = None
-    parent_type: str | None = None
+    title: str | None = Field(default=None, max_length=500)
+    priority: Literal["high", "medium", "low"] | None = None
+    parent_type: Literal["project", "area"] | None = None
     parent_id: int | None = None
 
 
 class ArchiveMoveBody(BaseModel):
-    type: str
+    type: Literal["project", "area"]
     id: int
 
 
 app = FastAPI(title="PARA Task App")
-
-from pdf_module.routes import router as pdf_router
 
 app.include_router(pdf_router, prefix="/api")
 if STATIC_DIR.exists():
@@ -61,11 +84,7 @@ if STATIC_DIR.exists():
 
 
 def _render_template(name: str, request: Request, **kwargs):
-    import json
-    from jinja2 import Environment, FileSystemLoader
-    env = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)))
-    env.filters["tojson"] = lambda v: json.dumps(v)
-    template = env.get_template(name)
+    template = _get_jinja_env().get_template(name)
     return template.render(request=request, **kwargs)
 
 
@@ -88,10 +107,10 @@ async def document_view(
     linked_type: str | None = None,
     linked_id: int | None = None,
 ):
-    from pdf_module import service
     doc = service.get_document(doc_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
+    assert doc is not None  # type narrowing for template
     return _render_template(
         "document_view.html",
         request=request,
@@ -144,7 +163,7 @@ async def create_area(area: AreaCreate):
     data = load_data()
     if area.project_id is not None:
         if not any(p["id"] == area.project_id for p in data["projects"]):
-            return {"error": "Project not found"}
+            raise HTTPException(status_code=404, detail="Project not found")
     new_id = next_id("areas", data)
     new_area = {"id": new_id, "title": area.title}
     if area.project_id is not None:
@@ -187,7 +206,7 @@ async def move_to_archive(body: ArchiveMoveBody):
     if body.type == "project":
         container = next((p for p in data["projects"] if p["id"] == body.id), None)
         if not container:
-            return {"error": "Project not found"}
+            raise HTTPException(status_code=404, detail="Project not found")
         nested_areas = [a for a in data["areas"] if a.get("project_id") == body.id]
         area_ids = {a["id"] for a in nested_areas}
         tasks_direct = [t for t in data["tasks"] if t.get("parent_type") == "project" and t.get("parent_id") == body.id]
@@ -216,7 +235,7 @@ async def move_to_archive(body: ArchiveMoveBody):
     elif body.type == "area":
         container = next((a for a in data["areas"] if a["id"] == body.id), None)
         if not container:
-            return {"error": "Area not found"}
+            raise HTTPException(status_code=404, detail="Area not found")
         tasks_snapshot = [t for t in data["tasks"] if t.get("parent_type") == "area" and t.get("parent_id") == body.id]
         archive_entry = {
             "id": next_id("archives", data),
@@ -233,7 +252,7 @@ async def move_to_archive(body: ArchiveMoveBody):
         save_data(data)
         return {"ok": True, "archived": archive_entry}
     else:
-        return {"error": "Invalid type; use project or area"}
+        raise HTTPException(status_code=400, detail="Invalid type; use project or area")
 
 
 @app.get("/api/tasks")
@@ -273,12 +292,10 @@ async def create_task(task: TaskCreate):
     data = load_data()
     if task.parent_type == "project":
         if not any(p["id"] == task.parent_id for p in data["projects"]):
-            return {"error": "Project not found"}
+            raise HTTPException(status_code=404, detail="Project not found")
     elif task.parent_type == "area":
         if not any(a["id"] == task.parent_id for a in data["areas"]):
-            return {"error": "Area not found"}
-    else:
-        return {"error": "parent_type must be project or area"}
+            raise HTTPException(status_code=404, detail="Area not found")
     new_id = next_id("tasks", data)
     new_task = {
         "id": new_id,
@@ -344,7 +361,7 @@ async def suggest_when(task_id: int):
     data = load_data()
     task = next((t for t in data["tasks"] if t["id"] == task_id), None)
     if not task:
-        return {"error": "Task not found"}
+        raise HTTPException(status_code=404, detail="Task not found")
     suggestions = {
         "high": "Do this today, ideally in the next 2 hours.",
         "medium": "Schedule for this week; block 1–2 hours.",
