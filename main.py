@@ -37,6 +37,13 @@ class TaskCreate(BaseModel):
     parent_id: int
 
 
+class TaskUpdate(BaseModel):
+    title: str | None = None
+    priority: str | None = None
+    parent_type: str | None = None
+    parent_id: int | None = None
+
+
 class ArchiveMoveBody(BaseModel):
     type: str
     id: int
@@ -279,6 +286,53 @@ async def create_task(task: TaskCreate):
     data["tasks"].append(new_task)
     save_data(data)
     return new_task
+
+
+@app.patch("/api/tasks/{task_id}")
+async def update_task(task_id: int, body: TaskUpdate):
+    data = load_data()
+    task = next((t for t in data["tasks"] if t["id"] == task_id), None)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if body.title is not None:
+        task["title"] = body.title
+    if body.priority is not None:
+        task["priority"] = body.priority
+    if body.parent_type is not None and body.parent_id is not None:
+        if body.parent_type == "project":
+            if not any(p["id"] == body.parent_id for p in data["projects"]):
+                raise HTTPException(status_code=400, detail="Project not found")
+        elif body.parent_type == "area":
+            if not any(a["id"] == body.parent_id for a in data["areas"]):
+                raise HTTPException(status_code=400, detail="Area not found")
+        else:
+            raise HTTPException(status_code=400, detail="parent_type must be project or area")
+        task["parent_type"] = body.parent_type
+        task["parent_id"] = body.parent_id
+    elif body.parent_type is not None or body.parent_id is not None:
+        raise HTTPException(status_code=400, detail="Must provide both parent_type and parent_id")
+    save_data(data)
+    return task
+
+
+@app.delete("/api/tasks/{task_id}")
+async def delete_task(task_id: int):
+    data = load_data()
+    task = next((t for t in data["tasks"] if t["id"] == task_id), None)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    data["tasks"] = [t for t in data["tasks"] if t["id"] != task_id]
+    data["document_links"] = [
+        lnk for lnk in data.get("document_links", [])
+        if not (lnk.get("linked_type") == "task" and lnk.get("linked_id") == task_id)
+    ]
+    markups = data.get("document_markups", [])
+    data["document_markups"] = [
+        m for m in markups
+        if not (m.get("linked_type") == "task" and m.get("linked_id") == task_id)
+    ]
+    save_data(data)
+    return {"ok": True}
 
 
 @app.get("/api/tasks/{task_id}/suggest")
