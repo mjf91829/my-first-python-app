@@ -211,14 +211,8 @@ async def restore_markup_version(
     return {"ok": True}
 
 
-@router.get("/documents/{doc_id}/file/with-markups")
-async def serve_document_file_with_markups(
-    doc_id: int,
-    linked_type: str | None = None,
-    linked_id: int | None = None,
-    svc: PdfService = Depends(get_pdf_service),
-):
-    """Return PDF with current context markups embedded as annotations."""
+def _build_export_response(doc_id: int, linked_type: str | None, linked_id: int | None, svc):
+    """Shared logic: build flattened PDF with markups and return response."""
     if svc.get_document(doc_id) is None:
         raise HTTPException(status_code=404, detail="Document not found")
     try:
@@ -239,6 +233,28 @@ async def serve_document_file_with_markups(
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{safe}"'},
     )
+
+
+@router.get("/documents/{doc_id}/file/with-markups")
+async def serve_document_file_with_markups(
+    doc_id: int,
+    linked_type: str | None = None,
+    linked_id: int | None = None,
+    svc: PdfService = Depends(get_pdf_service),
+):
+    """Return PDF with current context markups embedded as annotations."""
+    return _build_export_response(doc_id, linked_type, linked_id, svc)
+
+
+@router.get("/documents/{doc_id}/export")
+async def export_document_with_markups(
+    doc_id: int,
+    linked_type: str | None = None,
+    linked_id: int | None = None,
+    svc: PdfService = Depends(get_pdf_service),
+):
+    """Alias for GET file/with-markups: flattened PDF with current context markups."""
+    return _build_export_response(doc_id, linked_type, linked_id, svc)
 
 
 @router.post("/documents/{doc_id}/save-pdf")

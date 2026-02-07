@@ -5,16 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{{ doc.original_name or doc.filename }} - PDF Viewer</title>
   <link rel="stylesheet" href="/static/document-viewer.css">
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body>
   <div class="toolbar">
     <a href="/" class="back-link" id="back-to-para">← Back to PARA</a>
-    <span class="zoom-controls">
-      <button type="button" id="btn-zoom-out">−</button>
-      <span class="zoom-value" id="zoom-value">100%</span>
-      <button type="button" id="btn-zoom-in">+</button>
-    </span>
-    <button type="button" id="btn-print">Print</button>
     <a href="/api/documents/{{ doc_id }}/file" download="{{ doc.original_name or doc.filename }}" id="btn-download" class="toolbar-link">Download</a>
     <a href="#" id="btn-download-with-markups" class="toolbar-link toolbar-link-secondary">Download with markups</a>
     <button type="button" id="btn-save-pdf" class="toolbar-link btn-secondary">Save PDF</button>
@@ -51,6 +46,31 @@
       <p id="history-empty" class="history-empty" style="display:none;">No version history yet.</p>
     </div>
   </div>
+  <div id="floating-pill" class="floating-pill" role="toolbar" aria-label="Zoom and view">
+    <span class="zoom-controls">
+      <button type="button" id="btn-zoom-out" aria-label="Zoom out">−</button>
+      <span class="zoom-value" id="zoom-value">100%</span>
+      <button type="button" id="btn-zoom-in" aria-label="Zoom in">+</button>
+    </span>
+    <button type="button" id="btn-print">Print</button>
+  </div>
+
+  <div id="context-menu" class="context-menu" aria-hidden="true" role="menu">
+    <div id="context-menu-text-options" style="display: none;">
+      <label class="context-menu-label">Size</label>
+      <select id="context-menu-font-size" class="context-menu-select">
+        <option value="10">10</option>
+        <option value="12" selected>12</option>
+        <option value="14">14</option>
+        <option value="18">18</option>
+        <option value="24">24</option>
+      </select>
+      <label class="context-menu-label">Color</label>
+      <div id="context-menu-colors" class="context-menu-colors"></div>
+    </div>
+    <button type="button" id="context-menu-delete" class="context-menu-delete" role="menuitem">Delete</button>
+  </div>
+
   <div class="pdf-container" id="pdf-container">
     <div id="pdf-display-wrap" style="flex:1;display:flex;flex-direction:column;min-height:0;transform-origin:top left;">
       <object data="/api/documents/{{ doc_id }}/file" type="application/pdf" class="pdf-object">
@@ -71,6 +91,9 @@
   </div>
 
   <script src="/static/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@floating-ui/core@1.6.0"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@floating-ui/dom@1.6.0"></script>
   <script>
     window.__PDF_CONFIG__ = {
       docId: {{ doc_id }},
@@ -80,6 +103,7 @@
   </script>
   <script src="/static/pdf-editor/state.js"></script>
   <script src="/static/pdf-editor/utils.js"></script>
+  <script src="/static/pdf-editor/fabric-layer.js"></script>
   <script src="/static/pdf-editor/markup-tools.js"></script>
   <script src="/static/pdf-editor/undo-manager.js"></script>
   <script src="/static/pdf-editor/save-manager.js"></script>

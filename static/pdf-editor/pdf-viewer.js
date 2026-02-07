@@ -68,6 +68,9 @@
   function evictPage(pageIndex) {
     var info = pageInfos[pageIndex];
     if (!info || !info.rendered) return;
+    if (window.PdfEditor.fabricLayer) {
+      window.PdfEditor.fabricLayer.disposeFabricForPage(pageIndex);
+    }
     var placeholder = createPlaceholder(info.width, info.height);
     while (info.el.firstChild) info.el.removeChild(info.el.firstChild);
     info.el.appendChild(placeholder);
@@ -95,23 +98,27 @@
     var ctx = canvas.getContext('2d');
     await page.render({ canvasContext: ctx, viewport: viewport }).promise;
 
-    var overlay = document.createElement('div');
-    overlay.className = 'page-annotations';
-    overlay.style.width = w + 'px';
-    overlay.style.height = h + 'px';
-    overlay.dataset.page = pageIndex;
-
     if (info.placeholderEl) info.placeholderEl.remove();
     while (info.el.firstChild) info.el.removeChild(info.el.firstChild);
     info.el.appendChild(canvas);
-    info.el.appendChild(overlay);
     info.canvas = canvas;
-    info.overlay = overlay;
+    info.overlay = null;
     info.rendered = true;
     info.placeholderEl = null;
 
-    window.PdfEditor.annotationLayer.setupAnnotationLayer(info.el, pageIndex, w, h);
-    window.PdfEditor.annotationLayer.renderMarkups();
+    if (window.PdfEditor.fabricLayer) {
+      window.PdfEditor.fabricLayer.initFabricForPage(info.el, pageIndex, w, h);
+    } else {
+      var overlay = document.createElement('div');
+      overlay.className = 'page-annotations';
+      overlay.style.width = w + 'px';
+      overlay.style.height = h + 'px';
+      overlay.dataset.page = pageIndex;
+      info.el.appendChild(overlay);
+      info.overlay = overlay;
+      window.PdfEditor.annotationLayer.setupAnnotationLayer(info.el, pageIndex, w, h);
+      window.PdfEditor.annotationLayer.renderMarkups();
+    }
   }
 
   function onIntersection(entries) {

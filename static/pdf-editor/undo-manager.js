@@ -5,27 +5,44 @@
   window.PdfEditor.undoManager = {
     pushUndo: function () {
       if (state.isUndoRedo) return;
-      state.undoStack.push(JSON.parse(JSON.stringify(state.markups)));
+      var snapshot = window.PdfEditor.fabricLayer
+        ? window.PdfEditor.fabricLayer.serializeAllFabricToMarkups()
+        : state.markups;
+      state.undoStack.push(JSON.parse(JSON.stringify(snapshot)));
       state.redoStack.length = 0;
       window.PdfEditor.main.updateUndoRedoButtons();
     },
     undo: function () {
       if (state.undoStack.length === 0) return;
       state.isUndoRedo = true;
-      state.redoStack.push(JSON.parse(JSON.stringify(state.markups)));
+      var current = window.PdfEditor.fabricLayer
+        ? window.PdfEditor.fabricLayer.serializeAllFabricToMarkups()
+        : state.markups;
+      state.redoStack.push(JSON.parse(JSON.stringify(current)));
       state.markups = state.undoStack.pop();
       state.isUndoRedo = false;
-      window.PdfEditor.annotationLayer.renderMarkups();
+      if (window.PdfEditor.fabricLayer) {
+        window.PdfEditor.fabricLayer.loadMarkupsIntoFabric(state.markups);
+      } else {
+        window.PdfEditor.annotationLayer.renderMarkups();
+      }
       window.PdfEditor.saveManager.scheduleSave();
       window.PdfEditor.main.updateUndoRedoButtons();
     },
     redo: function () {
       if (state.redoStack.length === 0) return;
       state.isUndoRedo = true;
-      state.undoStack.push(JSON.parse(JSON.stringify(state.markups)));
+      var current = window.PdfEditor.fabricLayer
+        ? window.PdfEditor.fabricLayer.serializeAllFabricToMarkups()
+        : state.markups;
+      state.undoStack.push(JSON.parse(JSON.stringify(current)));
       state.markups = state.redoStack.pop();
       state.isUndoRedo = false;
-      window.PdfEditor.annotationLayer.renderMarkups();
+      if (window.PdfEditor.fabricLayer) {
+        window.PdfEditor.fabricLayer.loadMarkupsIntoFabric(state.markups);
+      } else {
+        window.PdfEditor.annotationLayer.renderMarkups();
+      }
       window.PdfEditor.saveManager.scheduleSave();
       window.PdfEditor.main.updateUndoRedoButtons();
     }

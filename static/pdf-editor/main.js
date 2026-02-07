@@ -53,6 +53,9 @@
     document.querySelectorAll('.page-annotations').forEach(function (el) {
       el.classList.toggle('interactive', state.isEditMode && state.mode !== 'none');
     });
+    if (window.PdfEditor.fabricLayer) {
+      window.PdfEditor.fabricLayer.setSelectionEnabled(state.mode === 'none');
+    }
     if (state.previewEl) { state.previewEl.remove(); state.previewEl = null; }
     if (state.inkStrokeEl) { state.inkStrokeEl.remove(); state.inkStrokeEl = null; }
     state.inkPoints = [];
@@ -144,6 +147,12 @@
         e.preventDefault();
         if (e.shiftKey) window.PdfEditor.undoManager.redo();
         else window.PdfEditor.undoManager.undo();
+      }
+      if ((e.key === 'Delete' || e.key === 'Backspace') && !e.target.matches('input, textarea')) {
+        if (window.PdfEditor.fabricLayer && state.mode === 'none') {
+          e.preventDefault();
+          window.PdfEditor.fabricLayer.removeSelectedFromAllCanvases();
+        }
       }
     });
 

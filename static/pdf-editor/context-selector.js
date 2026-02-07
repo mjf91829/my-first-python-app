@@ -23,10 +23,18 @@
       var self = this;
       return fetch(self.getMarkupsUrl()).then(function (res) { return res.json(); }).then(function (data) {
         state.markups = Array.isArray(data.markups) ? data.markups : [];
-        window.PdfEditor.annotationLayer.renderMarkups();
+        if (window.PdfEditor.fabricLayer) {
+          window.PdfEditor.fabricLayer.loadMarkupsIntoFabric(state.markups);
+        } else {
+          window.PdfEditor.annotationLayer.renderMarkups();
+        }
       }).catch(function () {
         state.markups = [];
-        window.PdfEditor.annotationLayer.renderMarkups();
+        if (window.PdfEditor.fabricLayer) {
+          window.PdfEditor.fabricLayer.loadMarkupsIntoFabric(state.markups);
+        } else {
+          window.PdfEditor.annotationLayer.renderMarkups();
+        }
       });
     },
     loadLinkedOptions: function () {

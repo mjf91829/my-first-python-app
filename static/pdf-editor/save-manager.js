@@ -42,13 +42,16 @@
       if (!state.dirty && state.saveStatus !== 'error') return Promise.resolve(true);
       state.saveStatus = 'saving';
       updateSaveIndicator();
+      var markupsToSave = window.PdfEditor.fabricLayer
+        ? window.PdfEditor.fabricLayer.serializeAllFabricToMarkups()
+        : state.markups;
       return fetch('/api/documents/' + config.docId + '/markups', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           linked_type: state.currentLinkedType,
           linked_id: state.currentLinkedId,
-          markups: state.markups
+          markups: markupsToSave
         })
       }).then(function (res) {
         if (!res.ok) {
@@ -59,6 +62,7 @@
         }
         state.dirty = false;
         state.saveStatus = 'saved';
+        state.markups = markupsToSave;
         updateSaveIndicator();
         if (!skipSavePdf) {
           window.PdfEditor.saveManager.performSavePdf().catch(function (e) { console.error('PDF could not be saved', e); });
