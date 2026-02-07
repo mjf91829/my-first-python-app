@@ -8,6 +8,7 @@ import uuid
 
 import pikepdf
 
+from constants import AREA, PROJECT, TASK
 from data_access import UPLOAD_DIR, load_data, next_id, save_data
 
 
@@ -144,11 +145,11 @@ def get_linked_items(doc_id: int) -> list[dict]:
     for lnk in links:
         lt, lid = lnk.get("linked_type"), lnk.get("linked_id")
         title = None
-        if lt == "project" and lid in projects:
+        if lt == PROJECT and lid in projects:
             title = projects[lid].get("title", "")
-        elif lt == "area" and lid in areas:
+        elif lt == AREA and lid in areas:
             title = areas[lid].get("title", "")
-        elif lt == "task" and lid in tasks:
+        elif lt == TASK and lid in tasks:
             title = tasks[lid].get("title", "")
         if title is not None:
             result.append({"linked_type": lt, "linked_id": lid, "title": title})
@@ -157,17 +158,17 @@ def get_linked_items(doc_id: int) -> list[dict]:
 
 def add_link(doc_id: int, linked_type: str, linked_id: int) -> bool:
     """Add document-PARA link. Returns False if doc not found or PARA item invalid."""
-    if linked_type not in ("task", "project", "area"):
+    if linked_type not in (TASK, PROJECT, AREA):
         return False
     data = load_data()
     doc = next((d for d in data["documents"] if d["id"] == doc_id), None)
     if not doc:
         return False
-    if linked_type == "project" and not any(p["id"] == linked_id for p in data["projects"]):
+    if linked_type == PROJECT and not any(p["id"] == linked_id for p in data["projects"]):
         return False
-    if linked_type == "area" and not any(a["id"] == linked_id for a in data["areas"]):
+    if linked_type == AREA and not any(a["id"] == linked_id for a in data["areas"]):
         return False
-    if linked_type == "task" and not any(t["id"] == linked_id for t in data["tasks"]):
+    if linked_type == TASK and not any(t["id"] == linked_id for t in data["tasks"]):
         return False
     if any(lnk.get("document_id") == doc_id and lnk.get("linked_type") == linked_type and lnk.get("linked_id") == linked_id for lnk in data["document_links"]):
         return True  # already linked
@@ -243,7 +244,7 @@ def set_markups(
     if (linked_type is None) != (linked_id is None):
         return False
     if linked_type is not None and linked_id is not None:
-        if linked_type not in ("task", "project", "area"):
+        if linked_type not in (TASK, PROJECT, AREA):
             return False
         links = data.get("document_links", [])
         if not any(
@@ -281,7 +282,7 @@ def _validate_markup_context(
     if (linked_type is None) != (linked_id is None):
         return False
     if linked_type is not None and linked_id is not None:
-        if linked_type not in ("task", "project", "area"):
+        if linked_type not in (TASK, PROJECT, AREA):
             return False
         links = data.get("document_links", [])
         if not any(
@@ -292,6 +293,23 @@ def _validate_markup_context(
         ):
             return False
     return True
+
+
+def _parse_hex_color(hex_str: str) -> tuple[float, float, float]:
+    """Parse #rgb or #rrggbb to (r,g,b) floats 0-1."""
+    if not hex_str or not isinstance(hex_str, str):
+        return (1.0, 1.0, 0.0)
+    m = re.match(r"^#?([a-f0-9]{6})$", hex_str, re.I) or re.match(r"^#?([a-f0-9]{3})$", hex_str, re.I)
+    if not m:
+        return (1.0, 1.0, 0.0)
+    s = m.group(1)
+    if len(s) == 3:
+        s = s[0] * 2 + s[1] * 2 + s[2] * 2
+    return (
+        int(s[0:2], 16) / 255,
+        int(s[2:4], 16) / 255,
+        int(s[4:6], 16) / 255,
+    )
 
 
 def _add_markups_to_pdf(pdf: pikepdf.Pdf, markups_list: list[dict]) -> None:
@@ -326,14 +344,45 @@ def _add_markups_to_pdf(pdf: pikepdf.Pdf, markups_list: list[dict]) -> None:
             rect = [llx, lly, urx, ury]
 
             if m.get("type") == "highlight":
+                r, g, b = _parse_hex_color(m.get("color") or "#ffeb3b")
                 ann = pikepdf.Dictionary(
                     Type=pikepdf.Name.Annot,
                     Subtype=pikepdf.Name.Highlight,
                     Rect=rect,
                     QuadPoints=pikepdf.Array([llx, ury, urx, ury, llx, lly, urx, lly]),
-                    C=pikepdf.Array([1.0, 1.0, 0.0]),
+                    C=pikepdf.Array([r, g, b]),
                 )
-                page["/Annots"].append(pikepdf.Object(ann))
+                page["/Annots"].append(pdf.make_indirect(ann))
+            elif m.get("type") == "ink":
+                pts = m.get("points") or []
+                if len(pts) >= 2:
+                    stroke = pikepdf.Array()
+                    for px, py in pts:
+                        stroke.append(float(px) * w)
+                        stroke.append((1 - float(py)) * h)
+                    ink_list = pikepdf.Array([stroke])
+                    ann = pikepdf.Dictionary(
+                        Type=pikepdf.Name.Annot,
+                        Subtype=pikepdf.Name.Ink,
+                        Rect=rect,
+                        InkList=ink_list,
+                        C=pikepdf.Array(_parse_hex_color(m.get("color") or "#000000")),
+                    )
+                    page["/Annots"].append(pdf.make_indirect(ann))
+            elif m.get("type") == "text":
+                text = (m.get("text") or "").strip()
+                if text:
+                    r, g, b = _parse_hex_color(m.get("color") or "#000000")
+                    fs = float(m.get("fontSize") or 12)
+                    da = f"/Helv {fs:.1f} Tf {r:.2f} {g:.2f} {b:.2f} rg"
+                    ann = pikepdf.Dictionary(
+                        Type=pikepdf.Name.Annot,
+                        Subtype=pikepdf.Name.FreeText,
+                        Rect=rect,
+                        Contents=pikepdf.String(text[:500]),
+                        DA=pikepdf.String(da),
+                    )
+                    page["/Annots"].append(pdf.make_indirect(ann))
             elif m.get("type") in ("comment", "sticky_note"):
                 ann = pikepdf.Dictionary(
                     Type=pikepdf.Name.Annot,
@@ -342,7 +391,7 @@ def _add_markups_to_pdf(pdf: pikepdf.Pdf, markups_list: list[dict]) -> None:
                     Contents=pikepdf.String(m.get("text") or ""),
                     Name=pikepdf.Name.Comment,
                 )
-                page["/Annots"].append(pikepdf.Object(ann))
+                page["/Annots"].append(pdf.make_indirect(ann))
 
 
 def build_pdf_with_markups(
