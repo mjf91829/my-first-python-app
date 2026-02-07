@@ -126,9 +126,21 @@
 
   <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/legacy/build/pdf.min.js"></script>
   <script>
-    if (typeof pdfjsLib !== 'undefined') {
-      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/legacy/build/pdf.worker.min.js';
+    function whenPdfJsReady() {
+      if (typeof pdfjsLib !== 'undefined') return Promise.resolve();
+      return new Promise(function (resolve) {
+        function check() {
+          if (typeof pdfjsLib !== 'undefined') { resolve(); return; }
+          requestAnimationFrame(check);
+        }
+        requestAnimationFrame(check);
+      });
     }
+    whenPdfJsReady().then(function () {
+      if (typeof pdfjsLib !== 'undefined') {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/legacy/build/pdf.worker.min.js';
+      }
+    });
     const DOC_ID = {{ doc_id }};
     const LINKED_TYPE = {{ linked_type | tojson if linked_type is not none else 'null' }};
     const LINKED_ID = {{ linked_id | tojson if linked_id is not none else 'null' }};
@@ -435,7 +447,7 @@
         canvas.width = w;
         const ctx = canvas.getContext('2d');
         const renderCtx = { canvasContext: ctx, viewport };
-        page.render(renderCtx);
+        await page.render(renderCtx).promise;
         const overlay = document.createElement('div');
         overlay.className = 'page-annotations';
         overlay.style.width = w + 'px';
@@ -488,7 +500,13 @@
     document.getElementById('btn-mode-comment').addEventListener('click', () => setMode('comment'));
 
     updateZoomDisplay();
-    loadPdf();
+    whenPdfJsReady().then(function () {
+      if (typeof pdfjsLib === 'undefined') {
+        document.getElementById('pdf-container').textContent = 'Failed to load PDF viewer library.';
+        return;
+      }
+      loadPdf();
+    });
   </script>
 </body>
 </html>
