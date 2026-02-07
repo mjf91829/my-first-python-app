@@ -8,11 +8,14 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from jinja2 import Environment, FileSystemLoader
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 from constants import AREA, PROJECT, TASK
 from data_access import load_data, next_id, save_data
 from pdf_module import service
 from pdf_module.routes import router as pdf_router
+from rate_limit import limiter
 from schemas import ArchiveMoveBody, AreaCreate, ProjectCreate, ResourceCreate, TaskCreate, TaskUpdate
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
@@ -30,6 +33,8 @@ def _get_jinja_env() -> Environment:
 
 
 app = FastAPI(title="PARA Task App")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.include_router(pdf_router, prefix="/api")
 if STATIC_DIR.exists():

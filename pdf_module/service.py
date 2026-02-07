@@ -5,11 +5,19 @@ from io import BytesIO
 from pathlib import Path
 import re
 import uuid
+from typing import TYPE_CHECKING
 
 import pikepdf
 
 from constants import AREA, PROJECT, TASK
-from data_access import UPLOAD_DIR, load_data, next_id, save_data
+from data_access import UPLOAD_DIR
+
+if TYPE_CHECKING:
+    from repositories import (
+        DocumentLinkRepository,
+        DocumentRepository,
+        MarkupRepository,
+    )
 
 
 def ensure_upload_dir() -> Path:
@@ -26,49 +34,6 @@ def safe_filename(original: str) -> str:
     return f"{uuid.uuid4().hex[:12]}_{base}{ext}"
 
 
-def upload_document(file_content: bytes, original_filename: str) -> dict:
-    """Save PDF file and create document record. Returns document dict or raises."""
-    ensure_upload_dir()
-    stored_name = safe_filename(original_filename)
-    path = UPLOAD_DIR / stored_name
-    path.write_bytes(file_content)
-
-    data = load_data()
-    doc_id = next_id("documents", data)
-    doc = {
-        "id": doc_id,
-        "filename": stored_name,
-        "original_name": original_filename,
-        "uploaded_at": datetime.now(tz=timezone.utc).isoformat(),
-    }
-    data["documents"].append(doc)
-    save_data(data)
-    return doc
-
-
-def list_documents(linked_type: str | None = None, linked_id: int | None = None) -> list[dict]:
-    """List documents, optionally filtered by linked PARA item."""
-    data = load_data()
-    docs = list(data.get("documents", []))
-    links = data.get("document_links", [])
-
-    if linked_type and linked_id is not None:
-        linked_doc_ids = {
-            lnk["document_id"]
-            for lnk in links
-            if lnk.get("linked_type") == linked_type and lnk.get("linked_id") == linked_id
-        }
-        docs = [d for d in docs if d["id"] in linked_doc_ids]
-
-    return docs
-
-
-def get_document(doc_id: int) -> dict | None:
-    """Get document metadata by id."""
-    data = load_data()
-    return next((d for d in data.get("documents", []) if d["id"] == doc_id), None)
-
-
 def _path_under_upload_dir(path: Path) -> bool:
     """Return True if path resolves to a location under UPLOAD_DIR."""
     base = UPLOAD_DIR.resolve()
@@ -79,227 +44,13 @@ def _path_under_upload_dir(path: Path) -> bool:
         return False
 
 
-def get_document_path(doc_id: int) -> Path | None:
-    """Get filesystem path for document file, or None if not found or path traversal."""
-    doc = get_document(doc_id)
-    if not doc:
-        return None
-    path = (UPLOAD_DIR / doc["filename"]).resolve()
-    if not _path_under_upload_dir(path):
-        return None
-    return path if path.exists() else None
-
-
-def replace_document(doc_id: int, file_content: bytes) -> dict:
-    """
-    Overwrite the existing document file with new PDF bytes.
-    Validates that the content looks like a PDF and that the document exists.
-    Writes to a temp file then replaces the original for safety.
-    Returns the document dict; raises ValueError if invalid.
-    """
-    if not file_content or not file_content.startswith(b"%PDF"):
-        raise ValueError("Invalid or empty PDF content")
-    doc = get_document(doc_id)
-    if not doc:
-        raise ValueError("Document not found")
-    path = get_document_path(doc_id)
-    if not path:
-        raise FileNotFoundError("Document file not found")
-    ensure_upload_dir()
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    try:
-        tmp.write_bytes(file_content)
-        tmp.replace(path)
-    except OSError as e:
-        if tmp.exists():
-            tmp.unlink(missing_ok=True)
-        raise e
-    return doc
-
-
-def delete_document(doc_id: int) -> bool:
-    """Delete document record and file. Returns True if deleted."""
-    data = load_data()
-    doc = next((d for d in data["documents"] if d["id"] == doc_id), None)
-    if not doc:
-        return False
-    path = (UPLOAD_DIR / doc["filename"]).resolve()
-    if path.exists() and _path_under_upload_dir(path):
-        path.unlink()
-    data["documents"] = [d for d in data["documents"] if d["id"] != doc_id]
-    data["document_links"] = [lnk for lnk in data["document_links"] if lnk.get("document_id") != doc_id]
-    data["document_markups"] = [m for m in data.get("document_markups", []) if m.get("document_id") != doc_id]
-    save_data(data)
-    return True
-
-
-def get_linked_items(doc_id: int) -> list[dict]:
-    """Get list of linked PARA items for a document: {type, id, title}."""
-    data = load_data()
-    links = [lnk for lnk in data.get("document_links", []) if lnk.get("document_id") == doc_id]
-    projects = {p["id"]: p for p in data.get("projects", [])}
-    areas = {a["id"]: a for a in data.get("areas", [])}
-    tasks = {t["id"]: t for t in data.get("tasks", [])}
-
-    result = []
-    for lnk in links:
-        lt, lid = lnk.get("linked_type"), lnk.get("linked_id")
-        title = None
-        if lt == PROJECT and lid in projects:
-            title = projects[lid].get("title", "")
-        elif lt == AREA and lid in areas:
-            title = areas[lid].get("title", "")
-        elif lt == TASK and lid in tasks:
-            title = tasks[lid].get("title", "")
-        if title is not None:
-            result.append({"linked_type": lt, "linked_id": lid, "title": title})
-    return result
-
-
-def add_link(doc_id: int, linked_type: str, linked_id: int) -> bool:
-    """Add document-PARA link. Returns False if doc not found or PARA item invalid."""
-    if linked_type not in (TASK, PROJECT, AREA):
-        return False
-    data = load_data()
-    doc = next((d for d in data["documents"] if d["id"] == doc_id), None)
-    if not doc:
-        return False
-    if linked_type == PROJECT and not any(p["id"] == linked_id for p in data["projects"]):
-        return False
-    if linked_type == AREA and not any(a["id"] == linked_id for a in data["areas"]):
-        return False
-    if linked_type == TASK and not any(t["id"] == linked_id for t in data["tasks"]):
-        return False
-    if any(lnk.get("document_id") == doc_id and lnk.get("linked_type") == linked_type and lnk.get("linked_id") == linked_id for lnk in data["document_links"]):
-        return True  # already linked
-    data["document_links"].append({"document_id": doc_id, "linked_type": linked_type, "linked_id": linked_id})
-    save_data(data)
-    return True
-
-
-def remove_link(doc_id: int, linked_type: str, linked_id: int) -> bool:
-    """Remove document-PARA link."""
-    data = load_data()
-    before = len(data["document_links"])
-    data["document_links"] = [
-        lnk for lnk in data["document_links"]
-        if not (lnk.get("document_id") == doc_id and lnk.get("linked_type") == linked_type and lnk.get("linked_id") == linked_id)
-    ]
-    if len(data["document_links"]) < before:
-        save_data(data)
-        return True
-    return False
-
-
-def get_documents_for_para(linked_type: str, linked_id: int) -> list[dict]:
-    """List documents linked to a project, area, or task."""
-    return list_documents(linked_type=linked_type, linked_id=linked_id)
-
-
-def _markup_record_key(rec: dict) -> tuple[int | None, str | None, int | None]:
-    """(document_id, linked_type, linked_id) for matching. None means document-level."""
-    return (
-        rec.get("document_id"),
-        rec.get("linked_type"),
-        rec.get("linked_id"),
-    )
-
-
-def get_markups(
-    doc_id: int,
-    linked_type: str | None = None,
-    linked_id: int | None = None,
-) -> list[dict]:
-    """
-    Get markups for a document and optional context.
-    If linked_type/linked_id are None, return document-level markups.
-    Returns the markups array (list of annotation objects); empty list if no record.
-    """
-    data = load_data()
-    if not get_document(doc_id):
-        return []
-    records = data.get("document_markups", [])
-    for rec in records:
-        if _markup_record_key(rec) == (doc_id, linked_type, linked_id):
-            return list(rec.get("markups", []))
-    return []
-
-
-def set_markups(
-    doc_id: int,
-    markups: list[dict],
-    linked_type: str | None = None,
-    linked_id: int | None = None,
-) -> bool:
-    """
-    Save markups for a document + context.
-    If linked_type and linked_id are both provided, validates that this doc is linked to that item.
-    If both are None, allows document-level markups.
-    Returns True on success, False if validation fails.
-    """
-    data = load_data()
-    if not get_document(doc_id):
-        return False
-    # Context must be both provided (linked item) or both None (document-level).
-    if (linked_type is None) != (linked_id is None):
-        return False
-    if linked_type is not None and linked_id is not None:
-        if linked_type not in (TASK, PROJECT, AREA):
-            return False
-        links = data.get("document_links", [])
-        if not any(
-            lnk.get("document_id") == doc_id
-            and lnk.get("linked_type") == linked_type
-            and lnk.get("linked_id") == linked_id
-            for lnk in links
-        ):
-            return False
-    records = data.get("document_markups", [])
-    key = (doc_id, linked_type, linked_id)
-    new_rec = {
-        "document_id": doc_id,
-        "linked_type": linked_type,
-        "linked_id": linked_id,
-        "markups": markups,
-    }
-    # Remove existing record for this (doc_id, linked_type, linked_id)
-    records = [r for r in records if _markup_record_key(r) != key]
-    records.append(new_rec)
-    data["document_markups"] = records
-    save_data(data)
-    return True
-
-
-def _validate_markup_context(
-    doc_id: int,
-    linked_type: str | None,
-    linked_id: int | None,
-) -> bool:
-    """Same validation as set_markups: document exists and context is valid."""
-    data = load_data()
-    if not get_document(doc_id):
-        return False
-    if (linked_type is None) != (linked_id is None):
-        return False
-    if linked_type is not None and linked_id is not None:
-        if linked_type not in (TASK, PROJECT, AREA):
-            return False
-        links = data.get("document_links", [])
-        if not any(
-            lnk.get("document_id") == doc_id
-            and lnk.get("linked_type") == linked_type
-            and lnk.get("linked_id") == linked_id
-            for lnk in links
-        ):
-            return False
-    return True
-
-
 def _parse_hex_color(hex_str: str) -> tuple[float, float, float]:
     """Parse #rgb or #rrggbb to (r,g,b) floats 0-1."""
     if not hex_str or not isinstance(hex_str, str):
         return (1.0, 1.0, 0.0)
-    m = re.match(r"^#?([a-f0-9]{6})$", hex_str, re.I) or re.match(r"^#?([a-f0-9]{3})$", hex_str, re.I)
+    m = re.match(r"^#?([a-f0-9]{6})$", hex_str, re.I) or re.match(
+        r"^#?([a-f0-9]{3})$", hex_str, re.I
+    )
     if not m:
         return (1.0, 1.0, 0.0)
     s = m.group(1)
@@ -394,91 +145,303 @@ def _add_markups_to_pdf(pdf: pikepdf.Pdf, markups_list: list[dict]) -> None:
                 page["/Annots"].append(pdf.make_indirect(ann))
 
 
-def build_pdf_with_markups(
-    doc_id: int,
+class PdfService:
+    """PDF document service using repository-based storage."""
+
+    def __init__(
+        self,
+        doc_repo: "DocumentRepository",
+        link_repo: "DocumentLinkRepository",
+        markup_repo: "MarkupRepository",
+    ):
+        self._doc_repo = doc_repo
+        self._link_repo = link_repo
+        self._markup_repo = markup_repo
+
+    def upload_document(self, file_content: bytes, original_filename: str) -> dict:
+        """Save PDF file and create document record. Returns document dict or raises."""
+        ensure_upload_dir()
+        stored_name = safe_filename(original_filename)
+        path = UPLOAD_DIR / stored_name
+        path.write_bytes(file_content)
+
+        doc_id = self._doc_repo.next_id()
+        doc = {
+            "id": doc_id,
+            "filename": stored_name,
+            "original_name": original_filename,
+            "uploaded_at": datetime.now(tz=timezone.utc).isoformat(),
+        }
+        self._doc_repo.add(doc)
+        return doc
+
+    def list_documents(
+        self,
+        linked_type: str | None = None,
+        linked_id: int | None = None,
+    ) -> list[dict]:
+        """List documents, optionally filtered by linked PARA item."""
+        if linked_type is not None and linked_id is not None:
+            return self._doc_repo.list_by_link(linked_type, linked_id)
+        return self._doc_repo.list_all()
+
+    def get_document(self, doc_id: int) -> dict | None:
+        """Get document metadata by id."""
+        return self._doc_repo.get(doc_id)
+
+    def get_document_path(self, doc_id: int) -> Path | None:
+        """Get filesystem path for document file, or None if not found or path traversal."""
+        doc = self._doc_repo.get(doc_id)
+        if not doc:
+            return None
+        path = (UPLOAD_DIR / doc["filename"]).resolve()
+        if not _path_under_upload_dir(path):
+            return None
+        return path if path.exists() else None
+
+    def replace_document(self, doc_id: int, file_content: bytes) -> dict:
+        """
+        Overwrite the existing document file with new PDF bytes.
+        Validates that the content looks like a PDF and that the document exists.
+        Returns the document dict; raises ValueError if invalid.
+        """
+        if not file_content or not file_content.startswith(b"%PDF"):
+            raise ValueError("Invalid or empty PDF content")
+        doc = self._doc_repo.get(doc_id)
+        if not doc:
+            raise ValueError("Document not found")
+        path = self.get_document_path(doc_id)
+        if not path:
+            raise FileNotFoundError("Document file not found")
+        ensure_upload_dir()
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        try:
+            tmp.write_bytes(file_content)
+            tmp.replace(path)
+        except OSError as e:
+            if tmp.exists():
+                tmp.unlink(missing_ok=True)
+            raise e
+        return doc
+
+    def delete_document(self, doc_id: int) -> bool:
+        """Delete document record and file. Returns True if deleted."""
+        doc = self._doc_repo.get(doc_id)
+        if not doc:
+            return False
+        path = (UPLOAD_DIR / doc["filename"]).resolve()
+        if path.exists() and _path_under_upload_dir(path):
+            path.unlink()
+        return self._doc_repo.delete(doc_id)
+
+    def get_linked_items(self, doc_id: int) -> list[dict]:
+        """Get list of linked PARA items for a document: {type, id, title}."""
+        from data_access import load_data
+
+        links = self._link_repo.get_links(doc_id)
+        data = load_data()
+        projects = {p["id"]: p for p in data.get("projects", [])}
+        areas = {a["id"]: a for a in data.get("areas", [])}
+        tasks = {t["id"]: t for t in data.get("tasks", [])}
+
+        result = []
+        for lnk in links:
+            lt, lid = lnk.get("linked_type"), lnk.get("linked_id")
+            title = None
+            if lt == PROJECT and lid in projects:
+                title = projects[lid].get("title", "")
+            elif lt == AREA and lid in areas:
+                title = areas[lid].get("title", "")
+            elif lt == TASK and lid in tasks:
+                title = tasks[lid].get("title", "")
+            if title is not None:
+                result.append({"linked_type": lt, "linked_id": lid, "title": title})
+        return result
+
+    def add_link(self, doc_id: int, linked_type: str, linked_id: int) -> bool:
+        """Add document-PARA link. Returns False if doc not found or PARA item invalid."""
+        return self._link_repo.add_link(doc_id, linked_type, linked_id)
+
+    def remove_link(self, doc_id: int, linked_type: str, linked_id: int) -> bool:
+        """Remove document-PARA link."""
+        return self._link_repo.remove_link(doc_id, linked_type, linked_id)
+
+    def get_documents_for_para(self, linked_type: str, linked_id: int) -> list[dict]:
+        """List documents linked to a project, area, or task."""
+        return self.list_documents(linked_type=linked_type, linked_id=linked_id)
+
+    def get_markups(
+        self,
+        doc_id: int,
+        linked_type: str | None = None,
+        linked_id: int | None = None,
+    ) -> list[dict]:
+        """Get markups for a document and optional context."""
+        return self._markup_repo.get_markups(doc_id, linked_type=linked_type, linked_id=linked_id)
+
+    def set_markups(
+        self,
+        doc_id: int,
+        markups: list[dict],
+        linked_type: str | None = None,
+        linked_id: int | None = None,
+    ) -> bool:
+        """Save markups for a document + context. Returns True on success."""
+        return self._markup_repo.set_markups(
+            doc_id, markups, linked_type=linked_type, linked_id=linked_id
+        )
+
+    def get_markup_history(
+        self,
+        doc_id: int,
+        linked_type: str | None = None,
+        linked_id: int | None = None,
+    ) -> list[dict]:
+        """Get markup version history: [{ version, created_at }, ...]."""
+        return self._markup_repo.get_history(
+            doc_id, linked_type=linked_type, linked_id=linked_id
+        )
+
+    def restore_markup_version(
+        self,
+        doc_id: int,
+        version: int,
+        linked_type: str | None = None,
+        linked_id: int | None = None,
+    ) -> bool:
+        """Restore markups from version. Returns False if version not found."""
+        return self._markup_repo.restore_version(
+            doc_id, version, linked_type=linked_type, linked_id=linked_id
+        )
+
+    def _validate_markup_context(
+        self,
+        doc_id: int,
+        linked_type: str | None,
+        linked_id: int | None,
+    ) -> bool:
+        """Check document exists and context is valid."""
+        return self._markup_repo.validate_context(doc_id, linked_type, linked_id)
+
+    def build_pdf_with_markups(
+        self,
+        doc_id: int,
+        linked_type: str | None = None,
+        linked_id: int | None = None,
+    ) -> bytes:
+        """
+        Build a PDF that includes the given document's content plus current markups as annotations.
+        Returns PDF bytes. Raises if document not found or context invalid.
+        """
+        if not self._validate_markup_context(doc_id, linked_type, linked_id):
+            raise ValueError("Document not found or invalid markup context")
+        path = self.get_document_path(doc_id)
+        if not path:
+            raise FileNotFoundError("Document file not found")
+        markups_list = self.get_markups(doc_id, linked_type=linked_type, linked_id=linked_id)
+
+        pdf = pikepdf.Pdf.open(path)
+        try:
+            _add_markups_to_pdf(pdf, markups_list)
+            buf = BytesIO()
+            pdf.save(buf)
+            return buf.getvalue()
+        finally:
+            pdf.close()
+
+    def build_pdf_with_markups_for_save(
+        self,
+        doc_id: int,
+        linked_type: str | None = None,
+        linked_id: int | None = None,
+    ) -> bytes:
+        """
+        Build a PDF for persisting as a new version: strip existing page annotations,
+        then add current context's markups from JSON. Use for save-new-version only.
+        """
+        if not self._validate_markup_context(doc_id, linked_type, linked_id):
+            raise ValueError("Document not found or invalid markup context")
+        path = self.get_document_path(doc_id)
+        if not path:
+            raise FileNotFoundError("Document file not found")
+        markups_list = self.get_markups(doc_id, linked_type=linked_type, linked_id=linked_id)
+
+        pdf = pikepdf.Pdf.open(path)
+        try:
+            for page in pdf.pages:
+                if "/Annots" in page:
+                    page["/Annots"] = pikepdf.Array()
+            _add_markups_to_pdf(pdf, markups_list)
+            buf = BytesIO()
+            pdf.save(buf)
+            return buf.getvalue()
+        finally:
+            pdf.close()
+
+    def save_document_pdf_version(
+        self,
+        doc_id: int,
+        linked_type: str | None = None,
+        linked_id: int | None = None,
+    ) -> dict:
+        """
+        Build PDF with current context's markups (strip then add), write to a new file,
+        and update the document to point to it. Previous filename is appended to doc.versions.
+        Returns {"ok": True, "filename": new_filename}. Does not delete the old file.
+        """
+        if not self._validate_markup_context(doc_id, linked_type, linked_id):
+            raise ValueError("Document not found or invalid markup context")
+        doc = self._doc_repo.get(doc_id)
+        if not doc:
+            raise ValueError("Document not found")
+        pdf_bytes = self.build_pdf_with_markups_for_save(
+            doc_id, linked_type=linked_type, linked_id=linked_id
+        )
+        original_name = doc.get("original_name", doc.get("filename", "document.pdf"))
+        new_filename = safe_filename(original_name)
+        out_path = UPLOAD_DIR / new_filename
+        ensure_upload_dir()
+        out_path.write_bytes(pdf_bytes)
+
+        self._doc_repo.update_filename(doc_id, new_filename)
+        return {"ok": True, "filename": new_filename}
+
+
+# --- Default service instance (for backward compatibility and non-route callers) ---
+_default_service: PdfService | None = None
+
+
+def _get_default_service() -> PdfService:
+    """Return default PdfService using JSON file repositories."""
+    global _default_service
+    if _default_service is None:
+        from repositories import (
+            get_document_link_repository,
+            get_document_repository,
+            get_markup_repository,
+        )
+
+        doc_repo = get_document_repository()
+        link_repo = get_document_link_repository()
+        markup_repo = get_markup_repository(doc_repo, link_repo)
+        _default_service = PdfService(doc_repo, link_repo, markup_repo)
+    return _default_service
+
+
+# --- Module-level facade for backward compatibility ---
+def get_document(doc_id: int) -> dict | None:
+    """Get document metadata by id."""
+    return _get_default_service().get_document(doc_id)
+
+
+def list_documents(
     linked_type: str | None = None,
     linked_id: int | None = None,
-) -> bytes:
-    """
-    Build a PDF that includes the given document's content plus current markups as annotations.
-    Returns PDF bytes. Raises if document not found or context invalid.
-    """
-    if not _validate_markup_context(doc_id, linked_type, linked_id):
-        raise ValueError("Document not found or invalid markup context")
-    path = get_document_path(doc_id)
-    if not path:
-        raise FileNotFoundError("Document file not found")
-    markups_list = get_markups(doc_id, linked_type=linked_type, linked_id=linked_id)
-
-    pdf = pikepdf.Pdf.open(path)
-    try:
-        _add_markups_to_pdf(pdf, markups_list)
-        buf = BytesIO()
-        pdf.save(buf)
-        return buf.getvalue()
-    finally:
-        pdf.close()
+) -> list[dict]:
+    """List documents, optionally filtered by linked PARA item."""
+    return _get_default_service().list_documents(linked_type=linked_type, linked_id=linked_id)
 
 
-def build_pdf_with_markups_for_save(
-    doc_id: int,
-    linked_type: str | None = None,
-    linked_id: int | None = None,
-) -> bytes:
-    """
-    Build a PDF for persisting as a new version: strip existing page annotations,
-    then add current context's markups from JSON. Use for save-new-version only.
-    """
-    if not _validate_markup_context(doc_id, linked_type, linked_id):
-        raise ValueError("Document not found or invalid markup context")
-    path = get_document_path(doc_id)
-    if not path:
-        raise FileNotFoundError("Document file not found")
-    markups_list = get_markups(doc_id, linked_type=linked_type, linked_id=linked_id)
-
-    pdf = pikepdf.Pdf.open(path)
-    try:
-        for page in pdf.pages:
-            if "/Annots" in page:
-                page["/Annots"] = pikepdf.Array()
-        _add_markups_to_pdf(pdf, markups_list)
-        buf = BytesIO()
-        pdf.save(buf)
-        return buf.getvalue()
-    finally:
-        pdf.close()
-
-
-def save_document_pdf_version(
-    doc_id: int,
-    linked_type: str | None = None,
-    linked_id: int | None = None,
-) -> dict:
-    """
-    Build PDF with current context's markups (strip then add), write to a new file,
-    and update the document to point to it. Previous filename is appended to doc.versions.
-    Returns {"ok": True, "filename": new_filename}. Does not delete the old file.
-    """
-    if not _validate_markup_context(doc_id, linked_type, linked_id):
-        raise ValueError("Document not found or invalid markup context")
-    doc = get_document(doc_id)
-    if not doc:
-        raise ValueError("Document not found")
-    pdf_bytes = build_pdf_with_markups_for_save(
-        doc_id, linked_type=linked_type, linked_id=linked_id
-    )
-    original_name = doc.get("original_name", doc.get("filename", "document.pdf"))
-    new_filename = safe_filename(original_name)
-    out_path = UPLOAD_DIR / new_filename
-    ensure_upload_dir()
-    out_path.write_bytes(pdf_bytes)
-
-    data = load_data()
-    doc_ref = next((d for d in data["documents"] if d["id"] == doc_id), None)
-    if not doc_ref:
-        raise ValueError("Document not found")
-    doc_ref.setdefault("versions", [])
-    doc_ref["versions"].append(doc_ref["filename"])
-    doc_ref["filename"] = new_filename
-    save_data(data)
-    return {"ok": True, "filename": new_filename}
+def get_document_path(doc_id: int) -> Path | None:
+    """Get filesystem path for document file, or None if not found or path traversal."""
+    return _get_default_service().get_document_path(doc_id)

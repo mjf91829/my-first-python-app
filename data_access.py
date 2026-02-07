@@ -25,6 +25,7 @@ def default_data() -> dict:
         "documents": [],
         "document_links": [],
         "document_markups": [],
+        "document_markup_versions": [],
     }
 
 
@@ -36,6 +37,8 @@ def _normalize_data(data: dict) -> dict:
         data["document_links"] = []
     if "document_markups" not in data:
         data["document_markups"] = []
+    if "document_markup_versions" not in data:
+        data["document_markup_versions"] = []
     return data
 
 
