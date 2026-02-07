@@ -172,6 +172,7 @@
   </div>
 
   <script src="/static/pdf.min.js"></script>
+  <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
   <script>
     function whenPdfJsReady() {
       if (typeof pdfjsLib !== 'undefined') return Promise.resolve();
@@ -205,10 +206,16 @@
     let undoStack = [];
     let redoStack = [];
     let saveStatus = 'idle';  // 'idle' | 'saving' | 'saved' | 'error'
+    let lastSaveError = '';
     let dirty = false;
     let saveTimeout = null;
     let isUndoRedo = false;
 
+    function escapeHtml(s) {
+      const div = document.createElement('div');
+      div.textContent = s == null ? '' : String(s);
+      return div.innerHTML;
+    }
     const container = document.getElementById('pdf-container');
     const zoomValueEl = document.getElementById('zoom-value');
     const contextWrap = document.getElementById('context-wrap');
@@ -283,7 +290,8 @@
       } else if (s === 'saved') {
         saveIndicatorEl.innerHTML = '<span class="save-indicator-check">✓</span> All changes saved';
       } else if (s === 'error') {
-        saveIndicatorEl.innerHTML = 'Failed to save · <button type="button" class="save-retry">Retry</button>';
+        const errTip = lastSaveError ? ` <span title="${escapeHtml(lastSaveError)}">(${escapeHtml(lastSaveError.slice(0, 40))}${lastSaveError.length > 40 ? '…' : ''})</span>` : '';
+        saveIndicatorEl.innerHTML = 'Failed to save' + errTip + ' · <button type="button" class="save-retry">Retry</button>';
       } else {
         saveIndicatorEl.textContent = '';
       }
@@ -309,7 +317,11 @@
             markups: markups,
           }),
         });
-        if (!res.ok) throw new Error(res.statusText);
+        if (!res.ok) {
+          const errBody = await res.json().catch(() => ({}));
+          const msg = errBody.detail || res.statusText;
+          throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+        }
         dirty = false;
         saveStatus = 'saved';
         updateSaveIndicator();
@@ -318,33 +330,91 @@
         }
       } catch (e) {
         console.error('Failed to save markups', e);
+        lastSaveError = e && e.message ? e.message : String(e);
         saveStatus = 'error';
         updateSaveIndicator();
       }
+    }
+
+    /** Build a single PDF Blob with current markups drawn onto the original PDF (flatten). */
+    async function buildFlattenedPdfBlob() {
+      if (typeof PDFLib === 'undefined') throw new Error('pdf-lib not loaded');
+      const rgb = PDFLib.rgb || PDFLib.RGB;
+      const res = await fetch(`/api/documents/${DOC_ID}/file`);
+      if (!res.ok) throw new Error('Could not load PDF');
+      const buf = await res.arrayBuffer();
+      const pdfDoc = await PDFLib.PDFDocument.load(buf);
+      const pages = pdfDoc.getPages();
+      const font = await pdfDoc.embedFont(PDFLib.StandardFonts.Helvetica);
+      for (let pageIndex = 0; pageIndex < pages.length; pageIndex++) {
+        const page = pages[pageIndex];
+        const pageW = page.getWidth();
+        const pageH = page.getHeight();
+        const pageMarkups = markups.filter(m => m.page === pageIndex);
+        for (const m of pageMarkups) {
+          const b = m.bounds || {};
+          const x = (b.x ?? 0) * pageW;
+          const y = (1 - (b.y ?? 0) - (b.height ?? 0.01)) * pageH;
+          const w = (b.width ?? 0.01) * pageW;
+          const h = (b.height ?? 0.01) * pageH;
+          if (m.type === 'highlight') {
+            page.drawRectangle({
+              x, y, width: w, height: h,
+              color: rgb(1, 1, 0),
+              opacity: 0.35,
+              borderColor: rgb(1, 0.85, 0),
+              borderWidth: 0.5,
+            });
+          } else if (m.type === 'comment' || m.type === 'sticky_note') {
+            page.drawRectangle({
+              x, y, width: Math.max(w, 24), height: Math.max(h, 24),
+              color: rgb(0.55, 0.36, 0.96),
+              opacity: 0.9,
+              borderWidth: 0.5,
+            });
+            const text = (m.text || '').trim();
+            if (text) {
+              const fontSize = 8;
+              const maxW = Math.max(w, 80) - 4;
+              page.setFont(font);
+              page.setFontSize(fontSize);
+              page.drawText(text.slice(0, 200), { x: x + 2, y: y + 4, size: fontSize, color: rgb(1, 1, 1), maxWidth: maxW });
+            }
+          }
+        }
+      }
+      const bytes = await pdfDoc.save();
+      return new Blob([bytes], { type: 'application/pdf' });
     }
 
     async function performSavePdf() {
       const btn = document.getElementById('btn-save-pdf');
       if (btn) btn.disabled = true;
       try {
-        const res = await fetch(`/api/documents/${DOC_ID}/save-pdf`, {
+        if (dirty || saveStatus === 'error') {
+          await performSave(true);
+        }
+        const blob = await buildFlattenedPdfBlob();
+        const form = new FormData();
+        form.append('file', blob, (document.title || 'document').replace(/ - PDF Viewer$/, '') + '.pdf');
+        const res = await fetch(`/api/documents/${DOC_ID}/replace`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            linked_type: currentLinkedType,
-            linked_id: currentLinkedId,
-          }),
+          body: form,
         });
-        if (!res.ok) throw new Error(res.statusText || 'Save failed');
-        const data = await res.json();
+        if (!res.ok) {
+          const errBody = await res.json().catch(() => ({}));
+          const msg = errBody.detail || res.statusText || 'Save failed';
+          throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+        }
         if (saveIndicatorEl && btn) {
           saveIndicatorEl.className = 'save-indicator save-indicator--saved';
-          saveIndicatorEl.innerHTML = '<span class="save-indicator-check">✓</span> PDF saved as new version';
+          saveIndicatorEl.innerHTML = '<span class="save-indicator-check">✓</span> PDF saved';
           setTimeout(updateSaveIndicator, 2500);
         }
-        return data;
+        return await res.json();
       } catch (e) {
         console.error('Failed to save PDF', e);
+        lastSaveError = e && e.message ? e.message : String(e);
         if (saveIndicatorEl && btn) {
           saveIndicatorEl.className = 'save-indicator save-indicator--error';
           saveIndicatorEl.textContent = 'Failed to save PDF';
@@ -423,17 +493,15 @@
     }
 
     function renderMarkups() {
-      document.querySelectorAll('.page-annotations').forEach(w => {
-        const wrap = w;
-        const pageIndex = parseInt(w.dataset.page, 10);
+      document.querySelectorAll('.page-annotations').forEach(annoLayer => {
+        const wrap = annoLayer;
+        const pageIndex = parseInt(annoLayer.dataset.page, 10);
         const pageMarkups = markups.filter(m => m.page === pageIndex);
         wrap.querySelectorAll('.anno-highlight, .anno-comment, .comment-popover').forEach(el => el.remove());
         const pageWrap = wrap.closest('.page-wrap');
         if (!pageWrap) return;
         const canvas = pageWrap.querySelector('canvas');
         if (!canvas) return;
-        const w = canvas.width;
-        const h = canvas.height;
         pageMarkups.forEach(m => {
           if (m.type === 'highlight' && m.bounds) {
             const b = m.bounds;
@@ -554,7 +622,14 @@
       if (hasContext) {
         const val = JSON.stringify({ t: currentLinkedType, i: currentLinkedId });
         const found = Array.from(contextSelect.options).some(o => o.value === val);
-        if (found) contextSelect.value = val;
+        if (found) {
+          contextSelect.value = val;
+        } else {
+          // URL context not linked to this document – save would get 400; use document-level so save works
+          currentLinkedType = null;
+          currentLinkedId = null;
+          contextSelect.value = '';
+        }
       }
       contextSelect.addEventListener('change', () => {
         const v = contextSelect.value;

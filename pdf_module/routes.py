@@ -183,3 +183,38 @@ async def save_document_pdf(doc_id: int, body: SavePdfBody | None = Body(None)):
         raise HTTPException(status_code=400, detail=str(e))
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Document file not found")
+
+
+@router.post("/documents/{doc_id}/replace")
+async def replace_document_file(doc_id: int, file: UploadFile = File(...)):
+    """Replace the document file with an uploaded PDF (e.g. flattened PDF with markups baked in)."""
+    if service.get_document(doc_id) is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are allowed")
+    content_length = file.size if hasattr(file, "size") else None
+    if content_length is not None and content_length > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="File too large")
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = await file.read(CHUNK_SIZE)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail="File too large")
+        chunks.append(chunk)
+    content = b"".join(chunks)
+    if not content:
+        raise HTTPException(status_code=400, detail="Empty file")
+    try:
+        doc = await asyncio.to_thread(service.replace_document, doc_id, content)
+        return {"ok": True, "document": doc}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Document file not found")
+    except Exception:
+        logger.exception("Replace document failed")
+        raise HTTPException(status_code=500, detail="Replace failed")
