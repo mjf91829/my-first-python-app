@@ -50,6 +50,12 @@
     .document-item .doc-linked .link-chip .unlink-btn { background: none; border: none; cursor: pointer; color: #666; padding: 0 0.2rem; font-size: 0.9rem; }
     .document-item .doc-link-form { display: flex; flex-wrap: wrap; gap: 0.25rem; align-items: center; margin-top: 0.5rem; font-size: 0.9rem; }
     .document-item .doc-link-form select { padding: 0.25rem 0.5rem; }
+    .para-linked-docs { margin-top: 0.5rem; font-size: 0.85rem; }
+    .para-linked-docs .doc-ref { display: inline-flex; align-items: center; gap: 0.25rem; margin: 0.2rem 0.2rem 0 0; padding: 0.2rem 0.4rem; background: #e8f0fe; border-radius: 4px; }
+    .para-linked-docs .doc-ref a { margin-right: 0.2rem; }
+    .para-linked-docs .doc-unlink { background: none; border: none; cursor: pointer; color: #666; padding: 0; font-size: 0.9rem; }
+    .para-link-doc-form { margin-top: 0.4rem; display: flex; gap: 0.25rem; align-items: center; flex-wrap: wrap; font-size: 0.85rem; }
+    .para-link-doc-form select { padding: 0.2rem 0.4rem; }
   </style>
 </head>
 <body>
@@ -184,18 +190,76 @@
       return div.innerHTML;
     }
 
-    function buildTaskLi(task) {
+    function buildParaLinkedDocs(linkedType, linkedId, linkedDocs, allDocs, onUnlink, onAddLink) {
+      const docs = linkedDocs || [];
+      const docsHtml = docs.map(d =>
+        `<span class="doc-ref"><a href="/documents/${d.id}" target="_blank" rel="noopener">${escapeHtml(d.original_name || d.filename)}</a>
+          <button type="button" class="doc-unlink" data-doc-id="${d.id}">×</button></span>`
+      ).join('');
+      const opts = allDocs.filter(d => !docs.some(x => x.id === d.id)).map(d =>
+        `<option value="${d.id}">${escapeHtml(d.original_name || d.filename)}</option>`
+      ).join('');
+      const div = document.createElement('div');
+      div.className = 'para-linked-docs-wrap';
+      div.innerHTML = `
+        <div class="para-linked-docs">${docsHtml || '<span class="doc-meta">No documents linked</span>'}</div>
+        <div class="para-link-doc-form">
+          <select class="para-doc-select"><option value="">Link document…</option>${opts}</select>
+          <button type="button" class="para-link-doc-btn">Link</button>
+        </div>
+      `;
+      div.querySelectorAll('.doc-unlink').forEach(btn => {
+        btn.addEventListener('click', () => onUnlink(parseInt(btn.dataset.docId, 10)));
+      });
+      const sel = div.querySelector('.para-doc-select');
+      div.querySelector('.para-link-doc-btn').addEventListener('click', () => {
+        const docId = parseInt(sel.value, 10);
+        if (!docId) return;
+        onAddLink(docId);
+      });
+      return div;
+    }
+
+    function buildTaskLi(task, paraDocMap, allDocs) {
       const li = document.createElement('div');
       li.className = 'task-item';
       li.dataset.id = task.id;
+      const linkedDocs = (paraDocMap && paraDocMap['task_' + task.id]) || [];
       li.innerHTML = `
-        <span><strong>${escapeHtml(task.title)}</strong> <span class="priority">(${escapeHtml(task.priority || 'medium')})</span></span>
-        <button type="button" class="suggest-btn" data-id="${task.id}">When should I do this?</button>
-        <div class="suggestion" id="suggestion-${task.id}" style="display: none;"></div>
+        <div style="flex:1;min-width:0;">
+          <span><strong>${escapeHtml(task.title)}</strong> <span class="priority">(${escapeHtml(task.priority || 'medium')})</span></span>
+          <button type="button" class="suggest-btn" data-id="${task.id}">When should I do this?</button>
+          <div class="suggestion" id="suggestion-${task.id}" style="display: none;"></div>
+        </div>
       `;
+      const linkedWrap = buildParaLinkedDocs('task', task.id, linkedDocs, allDocs || [],
+        (docId) => unlinkDocumentFromPara(docId, 'task', task.id, loadActive),
+        (docId) => linkDocumentToPara(docId, 'task', task.id, loadActive)
+      );
+      li.appendChild(linkedWrap);
       const box = li.querySelector('.suggestion');
       li.querySelector('.suggest-btn').addEventListener('click', () => fetchSuggestion(task.id, box));
       return li;
+    }
+
+    async function unlinkDocumentFromPara(docId, linkedType, linkedId, refresh) {
+      const res = await fetch(`/api/documents/${docId}/link`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ linked_type: linkedType, linked_id: linkedId })
+      });
+      if (!res.ok) return;
+      refresh();
+    }
+
+    async function linkDocumentToPara(docId, linkedType, linkedId, refresh) {
+      const res = await fetch(`/api/documents/${docId}/link`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ linked_type: linkedType, linked_id: linkedId })
+      });
+      if (!res.ok) { alert((await res.json()).detail || 'Could not add link'); return; }
+      refresh();
     }
 
     async function fetchSuggestion(taskId, boxEl) {
@@ -276,13 +340,29 @@
 
     async function loadActive() {
       const q = getTaskQuery();
-      const res = await fetch(`/api/tasks?${q}`);
-      const data = await res.json();
+      const [tasksRes, docsRes] = await Promise.all([
+        fetch(`/api/tasks?${q}`),
+        fetch('/api/documents')
+      ]);
+      const data = await tasksRes.json();
+      const docsData = await docsRes.json();
       const tasks = data.tasks || [];
       const projects = data.projects || [];
       const areas = data.areas || [];
+      const allDocs = docsData.documents || [];
       fillParentDropdown(projects, areas);
       fillFilterContainer(projects, areas);
+
+      const paraDocMap = {};
+      await Promise.all(allDocs.map(async (d) => {
+        const r = await fetch(`/api/documents/${d.id}`);
+        const j = await r.json();
+        (j.linked || []).forEach(l => {
+          const key = l.linked_type + '_' + l.linked_id;
+          if (!paraDocMap[key]) paraDocMap[key] = [];
+          paraDocMap[key].push(d);
+        });
+      }));
 
       const projectsList = document.getElementById('projects-list');
       const areasList = document.getElementById('areas-list');
@@ -304,16 +384,23 @@
       projects.forEach(p => {
         const card = document.createElement('div');
         card.className = 'container-card project';
+        const projectDocs = paraDocMap['project_' + p.id] || [];
+        const linkedSection = buildParaLinkedDocs('project', p.id, projectDocs, allDocs,
+          (docId) => unlinkDocumentFromPara(docId, 'project', p.id, loadActive),
+          (docId) => linkDocumentToPara(docId, 'project', p.id, loadActive)
+        );
         card.innerHTML = `
           <div class="container-header">
             <span class="container-title">${escapeHtml(p.title)}</span>
             <button type="button" class="archive-btn" data-type="project" data-id="${p.id}">Move to Archive</button>
           </div>
           <div class="container-meta">Goal: ${escapeHtml(p.goal || '')} · Deadline: ${escapeHtml(p.deadline || '')}</div>
+          <div class="para-linked-docs-container"></div>
           <div class="task-list" data-parent="project" data-id="${p.id}"></div>
         `;
+        card.querySelector('.para-linked-docs-container').appendChild(linkedSection);
         const list = card.querySelector('.task-list');
-        (tasksByProject[p.id] || []).forEach(t => list.appendChild(buildTaskLi(t)));
+        (tasksByProject[p.id] || []).forEach(t => list.appendChild(buildTaskLi(t, paraDocMap, allDocs)));
         card.querySelector('.archive-btn').addEventListener('click', () => moveToArchive('project', p.id));
         projectsList.appendChild(card);
       });
@@ -321,15 +408,22 @@
       areas.forEach(a => {
         const card = document.createElement('div');
         card.className = 'container-card area';
+        const areaDocs = paraDocMap['area_' + a.id] || [];
+        const linkedSection = buildParaLinkedDocs('area', a.id, areaDocs, allDocs,
+          (docId) => unlinkDocumentFromPara(docId, 'area', a.id, loadActive),
+          (docId) => linkDocumentToPara(docId, 'area', a.id, loadActive)
+        );
         card.innerHTML = `
           <div class="container-header">
             <span class="container-title">${escapeHtml(a.title)}</span>
             <button type="button" class="archive-btn" data-type="area" data-id="${a.id}">Move to Archive</button>
           </div>
+          <div class="para-linked-docs-container"></div>
           <div class="task-list" data-parent="area" data-id="${a.id}"></div>
         `;
+        card.querySelector('.para-linked-docs-container').appendChild(linkedSection);
         const list = card.querySelector('.task-list');
-        (tasksByArea[a.id] || []).forEach(t => list.appendChild(buildTaskLi(t)));
+        (tasksByArea[a.id] || []).forEach(t => list.appendChild(buildTaskLi(t, paraDocMap, allDocs)));
         card.querySelector('.archive-btn').addEventListener('click', () => moveToArchive('area', a.id));
         areasList.appendChild(card);
       });

@@ -1,9 +1,20 @@
 {
-  "projects": [],
+  "projects": [
+    {
+      "id": 1,
+      "title": "Work",
+      "goal": "Win",
+      "deadline": "2026-02-14"
+    }
+  ],
   "areas": [
     {
       "id": 1,
       "title": "Inbox"
+    },
+    {
+      "id": 2,
+      "title": "Work"
     }
   ],
   "resources": [],
@@ -43,6 +54,22 @@
       "priority": "medium",
       "parent_type": "area",
       "parent_id": 1
+    },
+    {
+      "id": 6,
+      "title": "Test",
+      "priority": "medium",
+      "parent_type": "area",
+      "parent_id": 1
+    },
+    {
+      "id": 7,
+      "title": "2",
+      "priority": "medium",
+      "parent_type": "area",
+      "parent_id": 2
     }
-  ]
+  ],
+  "documents": [],
+  "document_links": []
 }
