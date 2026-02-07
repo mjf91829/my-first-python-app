@@ -9,59 +9,66 @@
   ],
   "areas": [
     {
-      "id": 1,
-      "title": "Inbox"
-    },
-    {
       "id": 2,
       "title": "Work"
     }
   ],
   "resources": [],
-  "archives": [],
-  "tasks": [
+  "archives": [
     {
       "id": 1,
-      "title": "Test 1",
-      "priority": "medium",
-      "parent_type": "area",
-      "parent_id": 1
-    },
-    {
-      "id": 2,
-      "title": "Get groceries",
-      "priority": "medium",
-      "parent_type": "area",
-      "parent_id": 1
-    },
-    {
-      "id": 3,
-      "title": "get laid",
-      "priority": "medium",
-      "parent_type": "area",
-      "parent_id": 1
-    },
-    {
-      "id": 4,
-      "title": "1",
-      "priority": "medium",
-      "parent_type": "area",
-      "parent_id": 1
-    },
-    {
-      "id": 5,
-      "title": "Verify",
-      "priority": "medium",
-      "parent_type": "area",
-      "parent_id": 1
-    },
-    {
-      "id": 6,
-      "title": "Test",
-      "priority": "medium",
-      "parent_type": "area",
-      "parent_id": 1
-    },
+      "type": "area",
+      "title": "Inbox",
+      "goal": "",
+      "deadline": "",
+      "archived_at": "2026-02-07T19:53:30.934815+00:00",
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Test 1",
+          "priority": "medium",
+          "parent_type": "area",
+          "parent_id": 1
+        },
+        {
+          "id": 2,
+          "title": "Get groceries",
+          "priority": "medium",
+          "parent_type": "area",
+          "parent_id": 1
+        },
+        {
+          "id": 3,
+          "title": "get laid",
+          "priority": "medium",
+          "parent_type": "area",
+          "parent_id": 1
+        },
+        {
+          "id": 4,
+          "title": "1",
+          "priority": "medium",
+          "parent_type": "area",
+          "parent_id": 1
+        },
+        {
+          "id": 5,
+          "title": "Verify",
+          "priority": "medium",
+          "parent_type": "area",
+          "parent_id": 1
+        },
+        {
+          "id": 6,
+          "title": "Test",
+          "priority": "medium",
+          "parent_type": "area",
+          "parent_id": 1
+        }
+      ]
+    }
+  ],
+  "tasks": [
     {
       "id": 7,
       "title": "2",
