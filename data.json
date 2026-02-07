@@ -1,0 +1,48 @@
+{
+  "projects": [],
+  "areas": [
+    {
+      "id": 1,
+      "title": "Inbox"
+    }
+  ],
+  "resources": [],
+  "archives": [],
+  "tasks": [
+    {
+      "id": 1,
+      "title": "Test 1",
+      "priority": "medium",
+      "parent_type": "area",
+      "parent_id": 1
+    },
+    {
+      "id": 2,
+      "title": "Get groceries",
+      "priority": "medium",
+      "parent_type": "area",
+      "parent_id": 1
+    },
+    {
+      "id": 3,
+      "title": "get laid",
+      "priority": "medium",
+      "parent_type": "area",
+      "parent_id": 1
+    },
+    {
+      "id": 4,
+      "title": "1",
+      "priority": "medium",
+      "parent_type": "area",
+      "parent_id": 1
+    },
+    {
+      "id": 5,
+      "title": "Verify",
+      "priority": "medium",
+      "parent_type": "area",
+      "parent_id": 1
+    }
+  ]
+}
