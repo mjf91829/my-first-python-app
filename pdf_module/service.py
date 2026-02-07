@@ -89,6 +89,33 @@ def get_document_path(doc_id: int) -> Path | None:
     return path if path.exists() else None
 
 
+def replace_document(doc_id: int, file_content: bytes) -> dict:
+    """
+    Overwrite the existing document file with new PDF bytes.
+    Validates that the content looks like a PDF and that the document exists.
+    Writes to a temp file then replaces the original for safety.
+    Returns the document dict; raises ValueError if invalid.
+    """
+    if not file_content or not file_content.startswith(b"%PDF"):
+        raise ValueError("Invalid or empty PDF content")
+    doc = get_document(doc_id)
+    if not doc:
+        raise ValueError("Document not found")
+    path = get_document_path(doc_id)
+    if not path:
+        raise FileNotFoundError("Document file not found")
+    ensure_upload_dir()
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    try:
+        tmp.write_bytes(file_content)
+        tmp.replace(path)
+    except OSError as e:
+        if tmp.exists():
+            tmp.unlink(missing_ok=True)
+        raise e
+    return doc
+
+
 def delete_document(doc_id: int) -> bool:
     """Delete document record and file. Returns True if deleted."""
     data = load_data()
