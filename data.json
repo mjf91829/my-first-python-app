@@ -89,8 +89,20 @@
       "filename": "0c98da676312_Nyxara_Drathir.pdf",
       "original_name": "Nyxara Drathir.pdf",
       "uploaded_at": "2026-02-07T20:46:02.059671+00:00"
+    },
+    {
+      "id": 3,
+      "filename": "4fc1e5d64308_Mjf91829_159640953.pdf",
+      "original_name": "Mjf91829_159640953.pdf",
+      "uploaded_at": "2026-02-07T20:57:54.480230+00:00"
     }
   ],
-  "document_links": [],
+  "document_links": [
+    {
+      "document_id": 1,
+      "linked_type": "project",
+      "linked_id": 1
+    }
+  ],
   "document_markups": []
 }
