@@ -304,7 +304,7 @@
     }
 
     async function performSave(skipSavePdf) {
-      if (!dirty && saveStatus !== 'error') return;
+      if (!dirty && saveStatus !== 'error') return true;
       saveStatus = 'saving';
       updateSaveIndicator();
       try {
@@ -328,11 +328,13 @@
         if (!skipSavePdf) {
           performSavePdf().catch(e => console.error('PDF could not be saved', e));
         }
+        return true;
       } catch (e) {
         console.error('Failed to save markups', e);
         lastSaveError = e && e.message ? e.message : String(e);
         saveStatus = 'error';
         updateSaveIndicator();
+        return false;
       }
     }
 
@@ -392,7 +394,10 @@
       if (btn) btn.disabled = true;
       try {
         if (dirty || saveStatus === 'error') {
-          await performSave(true);
+          const saved = await performSave(true);
+          if (!saved) {
+            throw new Error(lastSaveError || 'Markups could not be saved. Fix the error and retry.');
+          }
         }
         const blob = await buildFlattenedPdfBlob();
         const form = new FormData();
@@ -434,7 +439,10 @@
       btn.textContent = 'Saving...';
       try {
         if (dirty || saveStatus === 'error') {
-          await performSave(true);
+          const saved = await performSave(true);
+          if (!saved) {
+            throw new Error(lastSaveError || 'Markups could not be saved. Fix the error and retry.');
+          }
         }
         await performSavePdf();
       } catch (e) {
