@@ -17,6 +17,7 @@ def default_data() -> dict:
         "tasks": [],
         "documents": [],
         "document_links": [],
+        "document_markups": [],
     }
 
 
@@ -28,6 +29,8 @@ def load_data() -> dict:
             data["documents"] = []
         if "document_links" not in data:
             data["document_links"] = []
+        if "document_markups" not in data:
+            data["document_markups"] = []
         return data
     data = default_data()
     if TASKS_FILE_LEGACY.exists():

@@ -70,6 +70,14 @@
       "parent_id": 2
     }
   ],
-  "documents": [],
-  "document_links": []
+  "documents": [
+    {
+      "id": 1,
+      "filename": "40042c180078_Death_House_Original.pdf",
+      "original_name": "Death House Original.pdf",
+      "uploaded_at": "2026-02-07T19:12:52.544027+00:00"
+    }
+  ],
+  "document_links": [],
+  "document_markups": []
 }

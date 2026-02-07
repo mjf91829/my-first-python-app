@@ -85,6 +85,7 @@ def delete_document(doc_id: int) -> bool:
         path.unlink()
     data["documents"] = [d for d in data["documents"] if d["id"] != doc_id]
     data["document_links"] = [lnk for lnk in data["document_links"] if lnk.get("document_id") != doc_id]
+    data["document_markups"] = [m for m in data.get("document_markups", []) if m.get("document_id") != doc_id]
     save_data(data)
     return True
 
@@ -150,3 +151,77 @@ def remove_link(doc_id: int, linked_type: str, linked_id: int) -> bool:
 def get_documents_for_para(linked_type: str, linked_id: int) -> list[dict]:
     """List documents linked to a project, area, or task."""
     return list_documents(linked_type=linked_type, linked_id=linked_id)
+
+
+def _markup_record_key(rec: dict) -> tuple[int | None, str | None, int | None]:
+    """(document_id, linked_type, linked_id) for matching. None means document-level."""
+    return (
+        rec.get("document_id"),
+        rec.get("linked_type"),
+        rec.get("linked_id"),
+    )
+
+
+def get_markups(
+    doc_id: int,
+    linked_type: str | None = None,
+    linked_id: int | None = None,
+) -> list[dict]:
+    """
+    Get markups for a document and optional context.
+    If linked_type/linked_id are None, return document-level markups.
+    Returns the markups array (list of annotation objects); empty list if no record.
+    """
+    data = load_data()
+    if not get_document(doc_id):
+        return []
+    records = data.get("document_markups", [])
+    for rec in records:
+        if _markup_record_key(rec) == (doc_id, linked_type, linked_id):
+            return list(rec.get("markups", []))
+    return []
+
+
+def set_markups(
+    doc_id: int,
+    markups: list[dict],
+    linked_type: str | None = None,
+    linked_id: int | None = None,
+) -> bool:
+    """
+    Save markups for a document + context.
+    If linked_type and linked_id are both provided, validates that this doc is linked to that item.
+    If both are None, allows document-level markups.
+    Returns True on success, False if validation fails.
+    """
+    data = load_data()
+    if not get_document(doc_id):
+        return False
+    # Context must be both provided (linked item) or both None (document-level).
+    if (linked_type is None) != (linked_id is None):
+        return False
+    if linked_type is not None and linked_id is not None:
+        if linked_type not in ("task", "project", "area"):
+            return False
+        links = data.get("document_links", [])
+        if not any(
+            lnk.get("document_id") == doc_id
+            and lnk.get("linked_type") == linked_type
+            and lnk.get("linked_id") == linked_id
+            for lnk in links
+        ):
+            return False
+    records = data.get("document_markups", [])
+    key = (doc_id, linked_type, linked_id)
+    new_rec = {
+        "document_id": doc_id,
+        "linked_type": linked_type,
+        "linked_id": linked_id,
+        "markups": markups,
+    }
+    # Remove existing record for this (doc_id, linked_type, linked_id)
+    records = [r for r in records if _markup_record_key(r) != key]
+    records.append(new_rec)
+    data["document_markups"] = records
+    save_data(data)
+    return True
