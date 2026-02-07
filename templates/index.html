@@ -6,272 +6,11 @@
   <title>PARA Task Manager</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <style>
-    :root {
-      --bg-page: #f7f8fa;
-      --bg-card: #ffffff;
-      --accent: #2563eb;
-      --accent-hover: #1d4ed8;
-      --text-primary: #1a1a2e;
-      --text-secondary: #64748b;
-      --border: #e2e8f0;
-      --radius-sm: 6px;
-      --radius-md: 12px;
-      --radius-lg: 16px;
-      --shadow-card: 0 1px 3px rgba(0,0,0,0.06);
-      --shadow-card-hover: 0 4px 12px rgba(0,0,0,0.08);
-      --priority-high: #dc2626;
-      --priority-medium: #d97706;
-      --priority-low: #6b7280;
-    }
-    * { box-sizing: border-box; }
-    body {
-      font-family: 'Inter', system-ui, -apple-system, sans-serif;
-      background: var(--bg-page);
-      color: var(--text-primary);
-      margin: 0;
-      min-height: 100vh;
-      display: flex;
-    }
-    .app-sidebar {
-      width: 220px;
-      min-width: 220px;
-      background: var(--bg-card);
-      border-right: 1px solid var(--border);
-      padding: 1.5rem 0;
-      flex-shrink: 0;
-    }
-    .app-sidebar .logo { padding: 0 1.25rem 1.25rem; font-weight: 700; font-size: 1.15rem; color: var(--text-primary); }
-    .app-sidebar nav { display: flex; flex-direction: column; gap: 0.25rem; }
-    .app-sidebar nav button {
-      width: 100%;
-      padding: 0.6rem 1.25rem;
-      border: none;
-      background: none;
-      font-family: inherit;
-      font-size: 0.9rem;
-      font-weight: 500;
-      color: var(--text-secondary);
-      text-align: left;
-      cursor: pointer;
-      border-radius: 0;
-      transition: background 0.15s, color 0.15s;
-    }
-    .app-sidebar nav button:hover { background: var(--bg-page); color: var(--text-primary); }
-    .app-sidebar nav button.active { background: rgba(37, 99, 235, 0.1); color: var(--accent); }
-    .app-main { flex: 1; max-width: 800px; padding: 2rem; margin: 0 auto; width: 100%; }
-    h1 { font-size: 1.75rem; font-weight: 700; margin: 0 0 1.5rem; color: var(--text-primary); }
-    .panel { display: none; }
-    .panel.visible { display: block; }
-    .filters { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.5rem; align-items: center; }
-    .filters label { font-size: 0.875rem; font-weight: 500; color: var(--text-secondary); }
-    .filters select { padding: 0.5rem 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border); font-size: 0.875rem; background: var(--bg-card); }
-    .form-section { margin-bottom: 1.5rem; }
-    .form-section h3 { font-size: 0.9rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-secondary); }
-    form { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.5rem; align-items: flex-end; }
-    form input[type="text"], form input[type="url"], form input[type="date"] { flex: 1; min-width: 140px; padding: 0.6rem 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.9rem; }
-    form input:focus, form select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2); }
-    form select { padding: 0.6rem 0.75rem; min-width: 120px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.9rem; background: var(--bg-card); }
-    form textarea { width: 100%; min-height: 72px; padding: 0.6rem 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.9rem; font-family: inherit; }
-    button { padding: 0.6rem 1rem; cursor: pointer; border-radius: var(--radius-sm); font-size: 0.875rem; font-weight: 500; font-family: inherit; transition: background 0.15s, border-color 0.15s; }
-    button.primary { background: var(--accent); color: #fff; border: none; }
-    button.primary:hover { background: var(--accent-hover); }
-    button.archive-btn { font-size: 0.8rem; margin-left: auto; background: var(--bg-page); color: var(--text-secondary); border: 1px solid var(--border); }
-    button.archive-btn:hover { background: var(--border); color: var(--text-primary); }
-    ul { list-style: none; padding: 0; margin: 0; }
-    .container-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-md);
-      padding: 1.25rem;
-      margin-bottom: 1rem;
-      box-shadow: var(--shadow-card);
-      transition: box-shadow 0.2s;
-    }
-    .container-card:hover { box-shadow: var(--shadow-card-hover); }
-    .container-card.project { border-left: 4px solid var(--accent); }
-    .container-card.area { border-left: 4px solid var(--text-secondary); }
-    .container-card.nested-area { margin-left: 1.25rem; border-left-color: #94a3b8; }
-    .container-header { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.5rem; }
-    .container-title { font-weight: 600; font-size: 1.05rem; }
-    .container-meta { font-size: 0.85rem; color: var(--text-secondary); }
-    .project-nested-areas { margin-bottom: 1rem; }
-    .task-list { margin-top: 0.75rem; padding-left: 0; }
-    .task-item {
-      display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem;
-      padding: 0.75rem;
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      margin-bottom: 0.5rem;
-      background: var(--bg-page);
-    }
-    .task-item .priority-pill {
-      display: inline-block;
-      padding: 0.2rem 0.5rem;
-      border-radius: 999px;
-      font-size: 0.7rem; font-weight: 600; text-transform: uppercase;
-    }
-    .task-item .priority-pill.high { background: rgba(220, 38, 38, 0.15); color: var(--priority-high); }
-    .task-item .priority-pill.medium { background: rgba(217, 119, 6, 0.15); color: var(--priority-medium); }
-    .task-item .priority-pill.low { background: rgba(107, 114, 128, 0.2); color: var(--priority-low); }
-    .task-item .priority { font-size: 0.8rem; text-transform: uppercase; }
-    .suggest-btn { font-size: 0.8rem; margin-left: auto; background: transparent; color: var(--accent); border: none; }
-    .suggest-btn:hover { text-decoration: underline; }
-    .suggestion { width: 100%; margin-top: 0.5rem; padding: 0.6rem; background: rgba(37, 99, 235, 0.08); border-radius: var(--radius-sm); font-size: 0.85rem; color: var(--text-primary); }
-    .error { color: var(--priority-high); }
-    .section-title { font-size: 0.9rem; font-weight: 600; margin: 1.5rem 0 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.02em; }
-    .resource-item, .archive-item {
-      padding: 1rem;
-      border: 1px solid var(--border);
-      border-radius: var(--radius-md);
-      margin-bottom: 0.75rem;
-      background: var(--bg-card);
-      box-shadow: var(--shadow-card);
-    }
-    .archive-item .archived-content { margin-top: 0.75rem; padding-left: 0.75rem; font-size: 0.875rem; display: none; color: var(--text-secondary); }
-    .archive-item.expanded .archived-content { display: block; }
-    .archive-item .archived-area-block { margin-bottom: 0.75rem; }
-    .document-item {
-      padding: 1rem;
-      border: 1px solid var(--border);
-      border-radius: var(--radius-md);
-      margin-bottom: 0.75rem;
-      background: var(--bg-card);
-      box-shadow: var(--shadow-card);
-    }
-    .document-item .doc-name { font-weight: 600; }
-    .document-item .doc-meta { font-size: 0.85rem; color: var(--text-secondary); margin: 0.25rem 0; }
-    .document-item .doc-linked { margin: 0.5rem 0; }
-    .document-item .doc-linked .link-chip { display: inline-flex; align-items: center; gap: 0.25rem; margin: 0.2rem 0.2rem 0 0; padding: 0.25rem 0.5rem; background: rgba(37, 99, 235, 0.1); border-radius: var(--radius-sm); font-size: 0.85rem; }
-    .document-item .doc-linked .link-chip .unlink-btn { background: none; border: none; cursor: pointer; color: var(--text-secondary); padding: 0 0.2rem; font-size: 0.9rem; }
-    .document-item .doc-link-form { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-top: 0.5rem; font-size: 0.9rem; }
-    .document-item .doc-link-form select { padding: 0.35rem 0.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border); }
-    .para-linked-docs { margin-top: 0.5rem; font-size: 0.85rem; }
-    .para-linked-docs .doc-ref { display: inline-flex; align-items: center; gap: 0.25rem; margin: 0.2rem 0.2rem 0 0; padding: 0.25rem 0.5rem; background: rgba(37, 99, 235, 0.1); border-radius: var(--radius-sm); }
-    .para-linked-docs .doc-ref a { margin-right: 0.2rem; color: var(--accent); }
-    .para-linked-docs .doc-unlink { background: none; border: none; cursor: pointer; color: var(--text-secondary); padding: 0; font-size: 0.9rem; }
-    .para-link-doc-form { margin-top: 0.4rem; display: flex; gap: 0.25rem; align-items: center; flex-wrap: wrap; font-size: 0.85rem; }
-    .para-link-doc-form select { padding: 0.35rem 0.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border); }
-    .dashboard-stats { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 2rem; }
-    .stat-card {
-      flex: 1;
-      min-width: 100px;
-      padding: 1.25rem;
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-md);
-      box-shadow: var(--shadow-card);
-      border-left: 4px solid var(--accent);
-    }
-    .stat-value { display: block; font-size: 2rem; font-weight: 700; color: var(--accent); }
-    .stat-label { font-size: 0.875rem; color: var(--text-secondary); }
-    .dashboard-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 2rem; }
-    @media (max-width: 640px) { .dashboard-grid { grid-template-columns: 1fr; } }
-    .dashboard-section { margin-bottom: 1.5rem; }
-    .dashboard-section-title { font-size: 1rem; font-weight: 600; margin: 0 0 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.02em; }
-    .dashboard-list { display: flex; flex-direction: column; gap: 0.5rem; }
-    .dashboard-project-item, .dashboard-task-item {
-      padding: 0.75rem 1rem;
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      font-size: 0.9rem;
-    }
-    .dashboard-project-item { border-left: 4px solid var(--accent); }
-    .dashboard-project-meta { font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem; }
-    .dashboard-task-item .priority-pill {
-      display: inline-block;
-      padding: 0.15rem 0.4rem;
-      border-radius: 999px;
-      font-size: 0.65rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      margin-right: 0.5rem;
-    }
-    .dashboard-task-item .priority-pill.high { background: rgba(220, 38, 38, 0.15); color: var(--priority-high); }
-    .dashboard-task-item .priority-pill.medium { background: rgba(217, 119, 6, 0.15); color: var(--priority-medium); }
-    .dashboard-task-item .priority-pill.low { background: rgba(107, 114, 128, 0.2); color: var(--priority-low); }
-    .dashboard-areas-row { display: flex; flex-wrap: wrap; gap: 0.5rem; }
-    .dashboard-area-chip {
-      padding: 0.4rem 0.75rem;
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 999px;
-      font-size: 0.85rem;
-      color: var(--text-primary);
-    }
-    .dashboard-cta { margin-top: 2rem; }
-    .dashboard-empty { font-size: 0.9rem; color: var(--text-secondary); margin: 0; }
-    .task-item .task-item-row { display: flex; align-items: flex-start; gap: 0.5rem; width: 100%; }
-    .task-item .task-item-row .task-item-content { flex: 1; min-width: 0; }
-    .row-menu-trigger {
-      flex-shrink: 0;
-      width: 2rem;
-      height: 2rem;
-      padding: 0;
-      border: none;
-      background: transparent;
-      color: var(--text-secondary);
-      cursor: pointer;
-      border-radius: var(--radius-sm);
-      font-size: 1.1rem;
-      line-height: 1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .row-menu-trigger:hover { background: var(--border); color: var(--text-primary); }
-    .row-menu-dropdown {
-      display: none;
-      position: fixed;
-      z-index: 100;
-      min-width: 180px;
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-      padding: 0.25rem 0;
-    }
-    .row-menu-dropdown.open { display: block; }
-    .row-menu-dropdown .row-menu-item {
-      display: block;
-      width: 100%;
-      padding: 0.5rem 1rem;
-      border: none;
-      background: none;
-      font-family: inherit;
-      font-size: 0.9rem;
-      text-align: left;
-      cursor: pointer;
-      color: var(--text-primary);
-    }
-    .row-menu-dropdown .row-menu-item:hover { background: var(--bg-page); }
-    .row-menu-dropdown .row-menu-divider { height: 1px; background: var(--border); margin: 0.25rem 0; }
-    .modal-overlay {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.4);
-      z-index: 200;
-      align-items: center;
-      justify-content: center;
-    }
-    .modal-overlay.visible { display: flex; }
-    .modal-box {
-      background: var(--bg-card);
-      border-radius: var(--radius-md);
-      padding: 1.5rem;
-      max-width: 420px;
-      width: 90%;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.2);
-    }
-    .modal-box h3 { margin: 0 0 1rem; font-size: 1.1rem; }
-    .modal-box .form-actions { margin-top: 1rem; display: flex; gap: 0.5rem; justify-content: flex-end; }
-    .modal-box select, .modal-box input { width: 100%; padding: 0.5rem 0.75rem; margin-bottom: 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-sm); }
-  </style>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script type="application/json" id="dashboard-preload">{{ dict(projects=projects, areas=areas, tasks=tasks) | tojson }}</script>
   <aside class="app-sidebar">
     <div class="logo">PARA</div>
@@ -320,16 +59,22 @@
   </div>
 
   <div id="panel-active" class="panel">
-    <div class="form-section">
+    <div class="add-buttons-row">
+      <button type="button" id="btn-add-project">Add project</button>
+      <button type="button" id="btn-add-area">Add area</button>
+      <button type="button" id="btn-add-task">Add task</button>
+    </div>
+    <div class="form-section collapsed" data-create-type="project" id="form-section-project">
       <h3>Create project</h3>
       <form id="form-project">
         <input type="text" id="project-title" placeholder="Title" required>
         <input type="text" id="project-goal" placeholder="Goal" required>
         <input type="date" id="project-deadline" required>
         <button type="submit" class="primary">Add project</button>
+        <button type="button" class="btn-cancel-create">Cancel</button>
       </form>
     </div>
-    <div class="form-section">
+    <div class="form-section collapsed" data-create-type="area" id="form-section-area">
       <h3>Create area</h3>
       <form id="form-area">
         <input type="text" id="area-title" placeholder="Area (e.g. Work, Health)" required>
@@ -337,9 +82,10 @@
           <option value="">— Top-level —</option>
         </select>
         <button type="submit" class="primary">Add area</button>
+        <button type="button" class="btn-cancel-create">Cancel</button>
       </form>
     </div>
-    <div class="form-section">
+    <div class="form-section collapsed" data-create-type="task" id="form-section-task">
       <h3>Add task</h3>
       <form id="form-task">
         <input type="text" id="task-title" placeholder="Task name" required>
@@ -352,9 +98,18 @@
           <option value="">Select project or area</option>
         </select>
         <button type="submit" class="primary">Add task</button>
+        <button type="button" class="btn-cancel-create">Cancel</button>
       </form>
     </div>
-    <div class="filters">
+    <div class="filters-wrapper">
+      <button type="button" id="filters-toggle" class="filters-toggle" aria-expanded="false">Filters</button>
+      <div class="filters collapsed" id="filters-row">
+      <label>Show:</label>
+      <select id="filter-completed">
+        <option value="">All</option>
+        <option value="false">Active only</option>
+        <option value="true">Completed only</option>
+      </select>
       <label>Filter priority:</label>
       <select id="filter-priority">
         <option value="">All</option>
@@ -373,6 +128,7 @@
         <option value="priority">Priority</option>
         <option value="title">Title</option>
       </select>
+      </div>
     </div>
     <div id="active-content">
       <div class="section-title">Projects</div>
@@ -482,7 +238,36 @@
     const taskParent = document.getElementById('task-parent');
     const filterContainer = document.getElementById('filter-container');
     const filterPriority = document.getElementById('filter-priority');
+    const filterCompleted = document.getElementById('filter-completed');
     const sortBy = document.getElementById('sort-by');
+
+    function showCreateForm(type) {
+      document.querySelectorAll('#panel-active .form-section[data-create-type]').forEach(function(section) {
+        section.classList.toggle('collapsed', type === null || section.dataset.createType !== type);
+      });
+    }
+
+    document.getElementById('btn-add-project').addEventListener('click', function() { showCreateForm('project'); });
+    document.getElementById('btn-add-area').addEventListener('click', function() { showCreateForm('area'); });
+    document.getElementById('btn-add-task').addEventListener('click', function() { showCreateForm('task'); });
+    document.querySelectorAll('.btn-cancel-create').forEach(function(btn) {
+      btn.addEventListener('click', function() { showCreateForm(null); });
+    });
+
+    (function initFiltersToggle() {
+      var filtersRow = document.getElementById('filters-row');
+      var filtersToggle = document.getElementById('filters-toggle');
+      var storageKey = 'paraTaskManagerFiltersExpanded';
+      var expanded = localStorage.getItem(storageKey) === 'true';
+      filtersRow.classList.toggle('collapsed', !expanded);
+      filtersToggle.setAttribute('aria-expanded', expanded);
+      filtersToggle.addEventListener('click', function() {
+        filtersRow.classList.toggle('collapsed');
+        expanded = !filtersRow.classList.contains('collapsed');
+        filtersToggle.setAttribute('aria-expanded', expanded);
+        localStorage.setItem(storageKey, expanded);
+      });
+    })();
 
     function setView(view) {
       const isDashboard = view === 'dashboard';
@@ -504,7 +289,30 @@
       else if (isDocuments) loadDocuments();
     }
 
+    function getDashboardSkeletonHtml() {
+      return (
+        '<div class="skeleton skeleton-stat"></div><div class="skeleton skeleton-stat"></div><div class="skeleton skeleton-stat"></div>'
+      );
+    }
+
     async function loadDashboard() {
+      const projectsEl = document.getElementById('dashboard-projects');
+      const tasksEl = document.getElementById('dashboard-tasks');
+      const areasEl = document.getElementById('dashboard-areas');
+      const statsEl = document.getElementById('panel-dashboard').querySelector('.dashboard-stats');
+      if (statsEl) {
+        const statCards = statsEl.querySelectorAll('.stat-card');
+        statCards.forEach(card => {
+          const val = card.querySelector('.stat-value');
+          if (val) {
+            val.style.opacity = '0.3';
+            val.textContent = '—';
+          }
+        });
+      }
+      projectsEl.innerHTML = '<div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div>';
+      tasksEl.innerHTML = '<div class="skeleton skeleton-task-row"></div><div class="skeleton skeleton-task-row"></div><div class="skeleton skeleton-task-row"></div>';
+      areasEl.innerHTML = '<span class="skeleton" style="display:inline-block;width:120px;height:2rem;border-radius:999px;"></span><span class="skeleton" style="display:inline-block;width:90px;height:2rem;border-radius:999px;margin-left:0.5rem;"></span>';
       try {
         const res = await fetch('/api/tasks');
         const data = await res.json();
@@ -515,6 +323,9 @@
         console.warn('Dashboard refresh failed, using existing preload:', e);
       }
       renderDashboard();
+      if (statsEl) {
+        statsEl.querySelectorAll('.stat-value').forEach(v => { v.style.opacity = ''; });
+      }
     }
 
     function renderDashboard() {
@@ -549,9 +360,10 @@
       const displayTasks = sortedTasks.slice(0, 8);
       displayTasks.forEach(t => {
         const div = document.createElement('div');
-        div.className = 'dashboard-task-item';
+        const isCompleted = !!t.completed;
+        div.className = 'dashboard-task-item' + (isCompleted ? ' task-completed' : '');
         const pri = (t.priority || 'medium').toLowerCase();
-        div.innerHTML = `<span class="priority-pill ${pri}">${pri}</span>${escapeHtml(t.title || '')}`;
+        div.innerHTML = `<span class="priority-pill ${pri}">${pri}</span><span class="task-title">${escapeHtml(t.title || '')}</span>`;
         tasksEl.appendChild(div);
       });
       if (displayTasks.length === 0) {
@@ -623,6 +435,7 @@
       document.getElementById('modal-edit-task').classList.remove('visible');
       currentEditTaskId = null;
       loadActive();
+      showToast('Saved!', 'highlight');
     });
 
     document.getElementById('move-task-cancel').addEventListener('click', () => {
@@ -699,9 +512,20 @@
       return div;
     }
 
+    function showToast(message, type) {
+      const el = document.getElementById('toast');
+      el.textContent = message;
+      el.className = 'toast visible ' + (type || '');
+      clearTimeout(showToast._t);
+      showToast._t = setTimeout(() => {
+        el.classList.remove('visible');
+      }, 2500);
+    }
+
     function buildTaskLi(task, paraDocMap, allDocs) {
       const li = document.createElement('div');
-      li.className = 'task-item';
+      const isCompleted = !!task.completed;
+      li.className = 'task-item' + (isCompleted ? ' task-completed' : '');
       li.dataset.id = task.id;
       const linkedDocs = (paraDocMap && paraDocMap['task_' + task.id]) || [];
       const pri = (task.priority || 'medium').toLowerCase();
@@ -709,10 +533,11 @@
         <div class="task-item-row">
           <div class="task-item-content">
             <span class="priority-pill ${pri}">${escapeHtml(pri)}</span>
-            <span><strong>${escapeHtml(task.title)}</strong></span>
+            <span class="task-title"><strong>${escapeHtml(task.title)}</strong></span>
             <button type="button" class="suggest-btn" data-id="${task.id}">When should I do this?</button>
             <div class="suggestion" id="suggestion-${task.id}" style="display: none;"></div>
           </div>
+          <button type="button" class="btn-complete ${isCompleted ? 'is-completed' : ''}" data-task-id="${task.id}" aria-label="${isCompleted ? 'Mark incomplete' : 'Complete task'}">${isCompleted ? 'Undo' : '✓ Done'}</button>
           <button type="button" class="row-menu-trigger" aria-label="Row actions">&#8942;</button>
           <div class="row-menu-dropdown" data-task-id="${task.id}">
             <button type="button" class="row-menu-item" data-action="share">Share</button>
@@ -758,7 +583,66 @@
           else if (action === 'move') openMoveTaskModal(task);
         });
       });
+      const completeBtn = li.querySelector('.btn-complete');
+      completeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (task.completed) {
+          undoCompleteTask(task.id, li, completeBtn);
+        } else {
+          completeTask(task.id, li, completeBtn);
+        }
+      });
       return li;
+    }
+
+    async function completeTask(taskId, liEl, btnEl) {
+      if (!liEl) liEl = document.querySelector(`.task-item[data-id="${taskId}"]`);
+      if (!btnEl) btnEl = liEl && liEl.querySelector('.btn-complete');
+      liEl && liEl.classList.add('task-completed');
+      btnEl && (btnEl.textContent = 'Undo');
+      btnEl && btnEl.classList.add('is-completed');
+      try {
+        const res = await fetch(`/api/tasks/${taskId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ completed: true })
+        });
+        if (!res.ok) {
+          liEl && liEl.classList.remove('task-completed');
+          btnEl && (btnEl.textContent = '✓ Done');
+          btnEl && btnEl.classList.remove('is-completed');
+          return;
+        }
+        showToast('Done!', 'success');
+      } catch (e) {
+        liEl && liEl.classList.remove('task-completed');
+        btnEl && (btnEl.textContent = '✓ Done');
+        btnEl && btnEl.classList.remove('is-completed');
+      }
+    }
+
+    async function undoCompleteTask(taskId, liEl, btnEl) {
+      if (!liEl) liEl = document.querySelector(`.task-item[data-id="${taskId}"]`);
+      if (!btnEl) btnEl = liEl && liEl.querySelector('.btn-complete');
+      liEl && liEl.classList.remove('task-completed');
+      btnEl && (btnEl.textContent = '✓ Done');
+      btnEl && btnEl.classList.remove('is-completed');
+      try {
+        const res = await fetch(`/api/tasks/${taskId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ completed: false })
+        });
+        if (!res.ok) {
+          liEl && liEl.classList.add('task-completed');
+          btnEl && (btnEl.textContent = 'Undo');
+          btnEl && btnEl.classList.add('is-completed');
+        }
+      } catch (e) {
+        liEl && liEl.classList.add('task-completed');
+        btnEl && (btnEl.textContent = 'Undo');
+        btnEl && btnEl.classList.add('is-completed');
+      }
     }
 
     async function unlinkDocumentFromPara(docId, linkedType, linkedId, refresh) {
@@ -923,6 +807,9 @@
       const params = new URLSearchParams();
       const priority = filterPriority.value;
       const sort = sortBy.value;
+      const completedVal = filterCompleted && filterCompleted.value;
+      if (completedVal === 'true') params.set('completed', 'true');
+      else if (completedVal === 'false') params.set('completed', 'false');
       if (priority) params.set('priority', priority);
       if (sort) params.set('sort', sort);
       const containerVal = filterContainer.value;
@@ -989,7 +876,19 @@
       });
     }
 
+    function getActiveSkeletonHtml() {
+      return (
+        '<div class="container-card project"><div class="skeleton skeleton-card" style="margin-bottom:0.5rem;"></div><div class="skeleton skeleton-task-row"></div><div class="skeleton skeleton-task-row"></div></div>' +
+        '<div class="container-card area"><div class="skeleton skeleton-card" style="margin-bottom:0.5rem;"></div><div class="skeleton skeleton-task-row"></div></div>'
+      );
+    }
+
     async function loadActive() {
+      const projectsList = document.getElementById('projects-list');
+      const areasList = document.getElementById('areas-list');
+      projectsList.innerHTML = getActiveSkeletonHtml();
+      areasList.innerHTML = '<div class="container-card area"><div class="skeleton skeleton-card"></div></div>';
+
       const q = getTaskQuery();
       const [tasksRes, docsRes] = await Promise.all([
         fetch(`/api/tasks?${q}`),
@@ -1016,8 +915,6 @@
         });
       }));
 
-      const projectsList = document.getElementById('projects-list');
-      const areasList = document.getElementById('areas-list');
       projectsList.innerHTML = '';
       areasList.innerHTML = '';
 
@@ -1131,6 +1028,11 @@
     }
 
     async function loadReference() {
+      const resourcesList = document.getElementById('resources-list');
+      const archivesList = document.getElementById('archives-list');
+      resourcesList.innerHTML = '<div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div>';
+      archivesList.innerHTML = '<div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div>';
+
       const [tasksRes, resourcesRes, archivesRes] = await Promise.all([
         fetch('/api/tasks'),
         fetch('/api/resources'),
@@ -1139,7 +1041,6 @@
       const resources = (await resourcesRes.json()).resources || [];
       const archives = (await archivesRes.json()).archives || [];
 
-      const resourcesList = document.getElementById('resources-list');
       resourcesList.innerHTML = '';
       resources.forEach(r => {
         const div = document.createElement('div');
@@ -1152,7 +1053,6 @@
         resourcesList.appendChild(div);
       });
 
-      const archivesList = document.getElementById('archives-list');
       archivesList.innerHTML = '';
       archives.forEach(ar => {
         const div = document.createElement('div');
@@ -1193,6 +1093,9 @@
     }
 
     async function loadDocuments() {
+      const documentsList = document.getElementById('documents-list');
+      documentsList.innerHTML = '<div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div>';
+
       const [docsRes, tasksRes] = await Promise.all([
         fetch('/api/documents'),
         fetch('/api/tasks')
@@ -1204,7 +1107,6 @@
       const areas = tasksData.areas || [];
       const tasks = tasksData.tasks || [];
 
-      const documentsList = document.getElementById('documents-list');
       documentsList.innerHTML = '';
       for (const doc of docs) {
         const detailRes = await fetch(`/api/documents/${doc.id}`);
@@ -1326,6 +1228,7 @@
       });
       if (!res.ok) return;
       e.target.reset();
+      showCreateForm(null);
       loadActive();
     });
 
@@ -1349,6 +1252,7 @@
       if (!res.ok) return;
       e.target.reset();
       document.getElementById('area-project').innerHTML = '<option value="">— Top-level —</option>';
+      showCreateForm(null);
       loadActive();
     });
 
@@ -1371,7 +1275,16 @@
       }
       if (!res.ok) return;
       e.target.reset();
-      loadActive();
+      showCreateForm(null);
+      const newTaskId = data.id;
+      loadActive().then(() => {
+        showToast('Task added!', 'success');
+        const newRow = document.querySelector(`.task-item[data-id="${newTaskId}"]`);
+        if (newRow) {
+          newRow.classList.add('task-item-new');
+          setTimeout(() => newRow.classList.remove('task-item-new'), 2000);
+        }
+      });
     });
 
     document.getElementById('form-resource').addEventListener('submit', async (e) => {
@@ -1392,6 +1305,7 @@
     filterPriority.addEventListener('change', loadActive);
     filterContainer.addEventListener('change', loadActive);
     sortBy.addEventListener('change', loadActive);
+    if (filterCompleted) filterCompleted.addEventListener('change', loadActive);
 
     renderDashboard();
   </script>

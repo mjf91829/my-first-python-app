@@ -3,17 +3,17 @@
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from jinja2 import Environment, FileSystemLoader
-from pydantic import BaseModel, Field, field_validator
 
+from constants import AREA, PROJECT, TASK
 from data_access import load_data, next_id, save_data
 from pdf_module import service
 from pdf_module.routes import router as pdf_router
+from schemas import ArchiveMoveBody, AreaCreate, ProjectCreate, ResourceCreate, TaskCreate, TaskUpdate
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -27,53 +27,6 @@ def _get_jinja_env() -> Environment:
         _JINJA_ENV = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)))
         _JINJA_ENV.filters["tojson"] = lambda v: json.dumps(v)
     return _JINJA_ENV
-
-
-# Pydantic models
-class ProjectCreate(BaseModel):
-    title: str = Field(..., max_length=500)
-    goal: str = Field(default="", max_length=500)
-    deadline: str = Field(default="", max_length=100)
-
-
-class AreaCreate(BaseModel):
-    title: str = Field(..., max_length=500)
-    project_id: int | None = None
-
-
-class ResourceCreate(BaseModel):
-    title: str = Field(..., max_length=500)
-    url: str = Field(default="", max_length=2000)
-    notes: str = Field(default="", max_length=500)
-
-    @field_validator("url")
-    @classmethod
-    def url_must_be_http_or_https(cls, v: str) -> str:
-        if not v:
-            return v
-        v = v.strip()
-        if not (v.startswith("http://") or v.startswith("https://")):
-            raise ValueError("URL must start with http:// or https://")
-        return v
-
-
-class TaskCreate(BaseModel):
-    title: str = Field(..., max_length=500)
-    priority: Literal["high", "medium", "low"] = "medium"
-    parent_type: Literal["project", "area"]
-    parent_id: int
-
-
-class TaskUpdate(BaseModel):
-    title: str | None = Field(default=None, max_length=500)
-    priority: Literal["high", "medium", "low"] | None = None
-    parent_type: Literal["project", "area"] | None = None
-    parent_id: int | None = None
-
-
-class ArchiveMoveBody(BaseModel):
-    type: Literal["project", "area"]
-    id: int
 
 
 app = FastAPI(title="PARA Task App")
@@ -203,19 +156,19 @@ async def get_archives():
 @app.post("/api/archives/move")
 async def move_to_archive(body: ArchiveMoveBody):
     data = load_data()
-    if body.type == "project":
+    if body.type == PROJECT:
         container = next((p for p in data["projects"] if p["id"] == body.id), None)
         if not container:
             raise HTTPException(status_code=404, detail="Project not found")
         nested_areas = [a for a in data["areas"] if a.get("project_id") == body.id]
         area_ids = {a["id"] for a in nested_areas}
-        tasks_direct = [t for t in data["tasks"] if t.get("parent_type") == "project" and t.get("parent_id") == body.id]
-        tasks_under_areas = [t for t in data["tasks"] if t.get("parent_type") == "area" and t.get("parent_id") in area_ids]
+        tasks_direct = [t for t in data["tasks"] if t.get("parent_type") == PROJECT and t.get("parent_id") == body.id]
+        tasks_under_areas = [t for t in data["tasks"] if t.get("parent_type") == AREA and t.get("parent_id") in area_ids]
         tasks_snapshot = tasks_direct + tasks_under_areas
         areas_snapshot = [{"id": a["id"], "title": a["title"], "tasks": [t for t in tasks_under_areas if t.get("parent_id") == a["id"]]} for a in nested_areas]
         archive_entry = {
             "id": next_id("archives", data),
-            "type": "project",
+            "type": PROJECT,
             "source_id": body.id,
             "title": container["title"],
             "goal": container.get("goal", ""),
@@ -228,19 +181,19 @@ async def move_to_archive(body: ArchiveMoveBody):
         data["projects"] = [p for p in data["projects"] if p["id"] != body.id]
         data["areas"] = [a for a in data["areas"] if a.get("project_id") != body.id]
         data["tasks"] = [t for t in data["tasks"] if not (
-            (t.get("parent_type") == "project" and t.get("parent_id") == body.id) or
-            (t.get("parent_type") == "area" and t.get("parent_id") in area_ids)
+            (t.get("parent_type") == PROJECT and t.get("parent_id") == body.id) or
+            (t.get("parent_type") == AREA and t.get("parent_id") in area_ids)
         )]
         save_data(data)
         return {"ok": True, "archived": archive_entry}
-    elif body.type == "area":
+    elif body.type == AREA:
         container = next((a for a in data["areas"] if a["id"] == body.id), None)
         if not container:
             raise HTTPException(status_code=404, detail="Area not found")
-        tasks_snapshot = [t for t in data["tasks"] if t.get("parent_type") == "area" and t.get("parent_id") == body.id]
+        tasks_snapshot = [t for t in data["tasks"] if t.get("parent_type") == AREA and t.get("parent_id") == body.id]
         archive_entry = {
             "id": next_id("archives", data),
-            "type": "area",
+            "type": AREA,
             "source_id": body.id,
             "title": container["title"],
             "goal": "",
@@ -250,7 +203,7 @@ async def move_to_archive(body: ArchiveMoveBody):
         }
         data["archives"].append(archive_entry)
         data["areas"] = [a for a in data["areas"] if a["id"] != body.id]
-        data["tasks"] = [t for t in data["tasks"] if not (t.get("parent_type") == "area" and t.get("parent_id") == body.id)]
+        data["tasks"] = [t for t in data["tasks"] if not (t.get("parent_type") == AREA and t.get("parent_id") == body.id)]
         save_data(data)
         return {"ok": True, "archived": archive_entry}
     else:
@@ -263,6 +216,7 @@ async def get_tasks(
     parent_id: int | None = None,
     priority: str | None = None,
     sort: str | None = None,
+    completed: bool | None = None,
 ):
     data = load_data()
     tasks = list(data["tasks"])
@@ -274,10 +228,12 @@ async def get_tasks(
         tasks = [t for t in tasks if t.get("parent_id") == parent_id]
     if priority:
         tasks = [t for t in tasks if (t.get("priority") or "medium").lower() == priority.lower()]
+    if completed is not None:
+        tasks = [t for t in tasks if t.get("completed", False) == completed]
     if sort == "deadline":
         def deadline_key(t):
             pt, pid = t.get("parent_type"), t.get("parent_id")
-            if pt == "project" and pid and pid in projects:
+            if pt == PROJECT and pid and pid in projects:
                 return projects[pid].get("deadline", "9999-99-99")
             return "9999-99-99"
         tasks.sort(key=deadline_key)
@@ -292,10 +248,10 @@ async def get_tasks(
 @app.post("/api/tasks")
 async def create_task(task: TaskCreate):
     data = load_data()
-    if task.parent_type == "project":
+    if task.parent_type == PROJECT:
         if not any(p["id"] == task.parent_id for p in data["projects"]):
             raise HTTPException(status_code=404, detail="Project not found")
-    elif task.parent_type == "area":
+    elif task.parent_type == AREA:
         if not any(a["id"] == task.parent_id for a in data["areas"]):
             raise HTTPException(status_code=404, detail="Area not found")
     new_id = next_id("tasks", data)
@@ -305,6 +261,7 @@ async def create_task(task: TaskCreate):
         "priority": task.priority or "medium",
         "parent_type": task.parent_type,
         "parent_id": task.parent_id,
+        "completed": False,
     }
     data["tasks"].append(new_task)
     save_data(data)
@@ -322,10 +279,10 @@ async def update_task(task_id: int, body: TaskUpdate):
     if body.priority is not None:
         task["priority"] = body.priority
     if body.parent_type is not None and body.parent_id is not None:
-        if body.parent_type == "project":
+        if body.parent_type == PROJECT:
             if not any(p["id"] == body.parent_id for p in data["projects"]):
                 raise HTTPException(status_code=400, detail="Project not found")
-        elif body.parent_type == "area":
+        elif body.parent_type == AREA:
             if not any(a["id"] == body.parent_id for a in data["areas"]):
                 raise HTTPException(status_code=400, detail="Area not found")
         else:
@@ -334,6 +291,12 @@ async def update_task(task_id: int, body: TaskUpdate):
         task["parent_id"] = body.parent_id
     elif body.parent_type is not None or body.parent_id is not None:
         raise HTTPException(status_code=400, detail="Must provide both parent_type and parent_id")
+    if body.completed is not None:
+        task["completed"] = body.completed
+        if body.completed:
+            task["completed_at"] = datetime.now(timezone.utc).isoformat()
+        else:
+            task.pop("completed_at", None)
     save_data(data)
     return task
 
@@ -347,12 +310,12 @@ async def delete_task(task_id: int):
     data["tasks"] = [t for t in data["tasks"] if t["id"] != task_id]
     data["document_links"] = [
         lnk for lnk in data.get("document_links", [])
-        if not (lnk.get("linked_type") == "task" and lnk.get("linked_id") == task_id)
+        if not (lnk.get("linked_type") == TASK and lnk.get("linked_id") == task_id)
     ]
     markups = data.get("document_markups", [])
     data["document_markups"] = [
         m for m in markups
-        if not (m.get("linked_type") == "task" and m.get("linked_id") == task_id)
+        if not (m.get("linked_type") == TASK and m.get("linked_id") == task_id)
     ]
     save_data(data)
     return {"ok": True}

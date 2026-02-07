@@ -3,3 +3,14 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.pyo
+
+# Virtual environment
+venv/
+env/
+.venv/
+
+# Environment and secrets
+.env
+
+# Lock files (optional; remove if you want to commit them)
+*.lock
