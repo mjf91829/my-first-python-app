@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
@@ -48,12 +48,25 @@ from pdf_module.routes import router as pdf_router
 app.include_router(pdf_router, prefix="/api")
 
 
-@app.get("/", response_class=HTMLResponse)
-async def index(request: Request):
+def _render_template(name: str, request: Request, **kwargs):
     from jinja2 import Environment, FileSystemLoader
     env = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)))
-    template = env.get_template("index.html")
-    return template.render(request=request)
+    template = env.get_template(name)
+    return template.render(request=request, **kwargs)
+
+
+@app.get("/", response_class=HTMLResponse)
+async def index(request: Request):
+    return _render_template("index.html", request=request)
+
+
+@app.get("/documents/{doc_id}", response_class=HTMLResponse)
+async def document_view(request: Request, doc_id: int):
+    from pdf_module import service
+    doc = service.get_document(doc_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return _render_template("document_view.html", request=request, doc_id=doc_id, doc=doc)
 
 
 @app.get("/api/projects")
