@@ -203,6 +203,72 @@
     }
     .dashboard-cta { margin-top: 2rem; }
     .dashboard-empty { font-size: 0.9rem; color: var(--text-secondary); margin: 0; }
+    .task-item .task-item-row { display: flex; align-items: flex-start; gap: 0.5rem; width: 100%; }
+    .task-item .task-item-row .task-item-content { flex: 1; min-width: 0; }
+    .row-menu-trigger {
+      flex-shrink: 0;
+      width: 2rem;
+      height: 2rem;
+      padding: 0;
+      border: none;
+      background: transparent;
+      color: var(--text-secondary);
+      cursor: pointer;
+      border-radius: var(--radius-sm);
+      font-size: 1.1rem;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .row-menu-trigger:hover { background: var(--border); color: var(--text-primary); }
+    .row-menu-dropdown {
+      display: none;
+      position: fixed;
+      z-index: 100;
+      min-width: 180px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      padding: 0.25rem 0;
+    }
+    .row-menu-dropdown.open { display: block; }
+    .row-menu-dropdown .row-menu-item {
+      display: block;
+      width: 100%;
+      padding: 0.5rem 1rem;
+      border: none;
+      background: none;
+      font-family: inherit;
+      font-size: 0.9rem;
+      text-align: left;
+      cursor: pointer;
+      color: var(--text-primary);
+    }
+    .row-menu-dropdown .row-menu-item:hover { background: var(--bg-page); }
+    .row-menu-dropdown .row-menu-divider { height: 1px; background: var(--border); margin: 0.25rem 0; }
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.4);
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-overlay.visible { display: flex; }
+    .modal-box {
+      background: var(--bg-card);
+      border-radius: var(--radius-md);
+      padding: 1.5rem;
+      max-width: 420px;
+      width: 90%;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+    }
+    .modal-box h3 { margin: 0 0 1rem; font-size: 1.1rem; }
+    .modal-box .form-actions { margin-top: 1rem; display: flex; gap: 0.5rem; justify-content: flex-end; }
+    .modal-box select, .modal-box input { width: 100%; padding: 0.5rem 0.75rem; margin-bottom: 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-sm); }
   </style>
 </head>
 <body>
@@ -344,6 +410,50 @@
     <div id="archives-list"></div>
   </div>
 
+  <div id="modal-edit-task" class="modal-overlay" aria-hidden="true">
+    <div class="modal-box">
+      <h3>Edit task</h3>
+      <input type="text" id="edit-task-title" placeholder="Title">
+      <select id="edit-task-priority">
+        <option value="high">High</option>
+        <option value="medium">Medium</option>
+        <option value="low">Low</option>
+      </select>
+      <select id="edit-task-parent">
+        <option value="">Select project or area</option>
+      </select>
+      <div class="form-actions">
+        <button type="button" id="edit-task-cancel">Cancel</button>
+        <button type="button" id="edit-task-save" class="primary">Save</button>
+      </div>
+    </div>
+  </div>
+  <div id="modal-move-task" class="modal-overlay" aria-hidden="true">
+    <div class="modal-box">
+      <h3>Move task to</h3>
+      <select id="move-task-parent">
+        <option value="">Select project or area</option>
+      </select>
+      <div class="form-actions">
+        <button type="button" id="move-task-cancel">Cancel</button>
+        <button type="button" id="move-task-save" class="primary">Move</button>
+      </div>
+    </div>
+  </div>
+  <div id="modal-add-attachment" class="modal-overlay" aria-hidden="true">
+    <div class="modal-box">
+      <h3>Add attachment</h3>
+      <p style="font-size:0.9rem;color:var(--text-secondary);margin:0 0 0.75rem;">Link an existing document to this task.</p>
+      <select id="attachment-doc-select">
+        <option value="">Select document…</option>
+      </select>
+      <div class="form-actions">
+        <button type="button" id="attachment-cancel">Cancel</button>
+        <button type="button" id="attachment-link" class="primary">Link</button>
+      </div>
+    </div>
+  </div>
+
   </main>
   <script>
     const preloadEl = document.getElementById('dashboard-preload');
@@ -356,7 +466,9 @@
       }
     }
     if (!preload || typeof preload !== 'object') preload = {};
-    const { projects: preloadedProjects = [], areas: preloadedAreas = [], tasks: preloadedTasks = [] } = preload;
+    if (!preload.projects) preload.projects = [];
+    if (!preload.areas) preload.areas = [];
+    if (!preload.tasks) preload.tasks = [];
 
     const btnDashboard = document.getElementById('btn-dashboard');
     const btnActive = document.getElementById('btn-active');
@@ -386,20 +498,36 @@
       panelReference.classList.toggle('visible', isReference);
       panelDocuments.classList.toggle('visible', isDocuments);
       mainTitle.textContent = isDashboard ? 'Dashboard' : isActive ? 'Task Manager' : isReference ? 'Reference' : 'Documents';
-      if (isDashboard) renderDashboard();
+      if (isDashboard) loadDashboard();
       else if (isActive) loadActive();
       else if (isReference) loadReference();
       else if (isDocuments) loadDocuments();
     }
 
+    async function loadDashboard() {
+      try {
+        const res = await fetch('/api/tasks');
+        const data = await res.json();
+        preload.projects = data.projects || [];
+        preload.areas = data.areas || [];
+        preload.tasks = data.tasks || [];
+      } catch (e) {
+        console.warn('Dashboard refresh failed, using existing preload:', e);
+      }
+      renderDashboard();
+    }
+
     function renderDashboard() {
-      document.getElementById('stat-projects').querySelector('.stat-value').textContent = preloadedProjects.length;
-      document.getElementById('stat-areas').querySelector('.stat-value').textContent = preloadedAreas.length;
-      document.getElementById('stat-tasks').querySelector('.stat-value').textContent = preloadedTasks.length;
+      const projects = preload.projects || [];
+      const areas = preload.areas || [];
+      const tasks = preload.tasks || [];
+      document.getElementById('stat-projects').querySelector('.stat-value').textContent = projects.length;
+      document.getElementById('stat-areas').querySelector('.stat-value').textContent = areas.length;
+      document.getElementById('stat-tasks').querySelector('.stat-value').textContent = tasks.length;
 
       const projectsEl = document.getElementById('dashboard-projects');
       projectsEl.innerHTML = '';
-      preloadedProjects.forEach(p => {
+      projects.forEach(p => {
         const div = document.createElement('div');
         div.className = 'dashboard-project-item';
         div.innerHTML = `
@@ -408,14 +536,14 @@
         `;
         projectsEl.appendChild(div);
       });
-      if (preloadedProjects.length === 0) {
+      if (projects.length === 0) {
         projectsEl.innerHTML = '<p class="dashboard-empty">No projects yet.</p>';
       }
 
       const tasksEl = document.getElementById('dashboard-tasks');
       tasksEl.innerHTML = '';
       const priorityOrder = { high: 0, medium: 1, low: 2 };
-      const sortedTasks = [...preloadedTasks].sort((a, b) =>
+      const sortedTasks = [...tasks].sort((a, b) =>
         (priorityOrder[(a.priority || 'medium').toLowerCase()] ?? 1) - (priorityOrder[(b.priority || 'medium').toLowerCase()] ?? 1)
       );
       const displayTasks = sortedTasks.slice(0, 8);
@@ -432,15 +560,15 @@
 
       const areasEl = document.getElementById('dashboard-areas');
       areasEl.innerHTML = '';
-      const projectMap = Object.fromEntries(preloadedProjects.map(p => [p.id, p]));
-      preloadedAreas.forEach(a => {
+      const projectMap = Object.fromEntries(projects.map(p => [p.id, p]));
+      areas.forEach(a => {
         const chip = document.createElement('span');
         chip.className = 'dashboard-area-chip';
         const parentLabel = a.project_id && projectMap[a.project_id] ? ` (${projectMap[a.project_id].title})` : '';
         chip.textContent = (a.title || '') + parentLabel;
         areasEl.appendChild(chip);
       });
-      if (preloadedAreas.length === 0) {
+      if (areas.length === 0) {
         areasEl.innerHTML = '<p class="dashboard-empty">No areas yet.</p>';
       }
     }
@@ -450,6 +578,89 @@
     btnReference.addEventListener('click', () => setView('reference'));
     btnDocuments.addEventListener('click', () => setView('documents'));
     document.getElementById('btn-go-task-manager').addEventListener('click', () => setView('active'));
+
+    const modalEdit = document.getElementById('modal-edit-task');
+    const modalMove = document.getElementById('modal-move-task');
+    const modalAttachment = document.getElementById('modal-add-attachment');
+    modalEdit.addEventListener('click', (e) => { if (e.target === modalEdit) { modalEdit.classList.remove('visible'); currentEditTaskId = null; } });
+    modalMove.addEventListener('click', (e) => { if (e.target === modalMove) { modalMove.classList.remove('visible'); currentMoveTaskId = null; } });
+    modalAttachment.addEventListener('click', (e) => { if (e.target === modalAttachment) { modalAttachment.classList.remove('visible'); currentAttachmentTaskId = null; } });
+
+    document.getElementById('edit-task-cancel').addEventListener('click', () => {
+      document.getElementById('modal-edit-task').classList.remove('visible');
+      currentEditTaskId = null;
+    });
+    document.getElementById('edit-task-save').addEventListener('click', async () => {
+      if (currentEditTaskId == null) return;
+      const title = document.getElementById('edit-task-title').value.trim();
+      const priority = document.getElementById('edit-task-priority').value;
+      const parentVal = document.getElementById('edit-task-parent').value;
+      if (!title) { alert('Title is required'); return; }
+      let parent_type = null, parent_id = null;
+      if (parentVal) {
+        const [t, id] = parentVal.split(':');
+        if (t && id) { parent_type = t; parent_id = parseInt(id, 10); }
+      }
+      if (parent_type && parent_id) {
+        try {
+          const res = await fetch('/api/tasks/' + currentEditTaskId, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title, priority, parent_type, parent_id })
+          });
+          if (!res.ok) { const d = await res.json(); alert(d.detail || 'Could not update'); return; }
+        } catch (e) { alert('Could not update task'); return; }
+      } else {
+        try {
+          const res = await fetch('/api/tasks/' + currentEditTaskId, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title, priority })
+          });
+          if (!res.ok) { const d = await res.json(); alert(d.detail || 'Could not update'); return; }
+        } catch (e) { alert('Could not update task'); return; }
+      }
+      document.getElementById('modal-edit-task').classList.remove('visible');
+      currentEditTaskId = null;
+      loadActive();
+    });
+
+    document.getElementById('move-task-cancel').addEventListener('click', () => {
+      document.getElementById('modal-move-task').classList.remove('visible');
+      currentMoveTaskId = null;
+    });
+    document.getElementById('move-task-save').addEventListener('click', async () => {
+      if (currentMoveTaskId == null) return;
+      const parentVal = document.getElementById('move-task-parent').value;
+      if (!parentVal) { alert('Select a project or area'); return; }
+      const [parent_type, idStr] = parentVal.split(':');
+      const parent_id = parseInt(idStr, 10);
+      if (!parent_type || !parent_id) return;
+      try {
+        const res = await fetch('/api/tasks/' + currentMoveTaskId, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ parent_type, parent_id })
+        });
+        if (!res.ok) { const d = await res.json(); alert(d.detail || 'Could not move'); return; }
+        document.getElementById('modal-move-task').classList.remove('visible');
+        currentMoveTaskId = null;
+        loadActive();
+      } catch (e) { alert('Could not move task'); }
+    });
+
+    document.getElementById('attachment-cancel').addEventListener('click', () => {
+      document.getElementById('modal-add-attachment').classList.remove('visible');
+      currentAttachmentTaskId = null;
+    });
+    document.getElementById('attachment-link').addEventListener('click', async () => {
+      if (currentAttachmentTaskId == null) return;
+      const docId = parseInt(document.getElementById('attachment-doc-select').value, 10);
+      if (!docId) { alert('Select a document'); return; }
+      await linkDocumentToPara(docId, 'task', currentAttachmentTaskId, loadActive);
+      document.getElementById('modal-add-attachment').classList.remove('visible');
+      currentAttachmentTaskId = null;
+    });
 
     function escapeHtml(s) {
       const div = document.createElement('div');
@@ -495,11 +706,23 @@
       const linkedDocs = (paraDocMap && paraDocMap['task_' + task.id]) || [];
       const pri = (task.priority || 'medium').toLowerCase();
       li.innerHTML = `
-        <div style="flex:1;min-width:0;">
-          <span class="priority-pill ${pri}">${escapeHtml(pri)}</span>
-          <span><strong>${escapeHtml(task.title)}</strong></span>
-          <button type="button" class="suggest-btn" data-id="${task.id}">When should I do this?</button>
-          <div class="suggestion" id="suggestion-${task.id}" style="display: none;"></div>
+        <div class="task-item-row">
+          <div class="task-item-content">
+            <span class="priority-pill ${pri}">${escapeHtml(pri)}</span>
+            <span><strong>${escapeHtml(task.title)}</strong></span>
+            <button type="button" class="suggest-btn" data-id="${task.id}">When should I do this?</button>
+            <div class="suggestion" id="suggestion-${task.id}" style="display: none;"></div>
+          </div>
+          <button type="button" class="row-menu-trigger" aria-label="Row actions">&#8942;</button>
+          <div class="row-menu-dropdown" data-task-id="${task.id}">
+            <button type="button" class="row-menu-item" data-action="share">Share</button>
+            <button type="button" class="row-menu-item" data-action="attachment">Add attachment</button>
+            <button type="button" class="row-menu-item" data-action="edit">Edit</button>
+            <div class="row-menu-divider"></div>
+            <button type="button" class="row-menu-item" data-action="duplicate">Duplicate</button>
+            <button type="button" class="row-menu-item" data-action="delete">Delete</button>
+            <button type="button" class="row-menu-item" data-action="move">Move to…</button>
+          </div>
         </div>
       `;
       const linkedWrap = buildParaLinkedDocs('task', task.id, linkedDocs, allDocs || [],
@@ -509,6 +732,32 @@
       li.appendChild(linkedWrap);
       const box = li.querySelector('.suggestion');
       li.querySelector('.suggest-btn').addEventListener('click', () => fetchSuggestion(task.id, box));
+      const trigger = li.querySelector('.row-menu-trigger');
+      const dropdown = li.querySelector('.row-menu-dropdown');
+      trigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        document.querySelectorAll('.row-menu-dropdown.open').forEach(d => { if (d !== dropdown) d.classList.remove('open'); });
+        if (dropdown.classList.toggle('open')) {
+          const rect = trigger.getBoundingClientRect();
+          dropdown.style.left = rect.left + 'px';
+          dropdown.style.top = (rect.bottom + 4) + 'px';
+          const close = () => { dropdown.classList.remove('open'); document.removeEventListener('click', close); };
+          requestAnimationFrame(() => document.addEventListener('click', close));
+        }
+      });
+      dropdown.querySelectorAll('.row-menu-item').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          dropdown.classList.remove('open');
+          const action = btn.dataset.action;
+          if (action === 'share') shareTask(task.id);
+          else if (action === 'attachment') openAddAttachmentModal(task.id);
+          else if (action === 'edit') openEditTaskModal(task);
+          else if (action === 'duplicate') duplicateTask(task);
+          else if (action === 'delete') deleteTask(task.id);
+          else if (action === 'move') openMoveTaskModal(task);
+        });
+      });
       return li;
     }
 
@@ -549,6 +798,125 @@
         boxEl.textContent = 'Could not get suggestion.';
         boxEl.classList.add('error');
       }
+    }
+
+    function shareTask(taskId) {
+      const url = window.location.origin + '/' + '?task=' + taskId;
+      navigator.clipboard.writeText(url).then(() => {
+        const msg = document.createElement('span');
+        msg.textContent = 'Link copied';
+        msg.style.cssText = 'font-size:0.85rem;color:var(--accent);margin-left:0.5rem;';
+        const trigger = document.querySelector(`.task-item[data-id="${taskId}"] .row-menu-trigger`);
+        if (trigger) {
+          trigger.appendChild(msg);
+          setTimeout(() => msg.remove(), 2000);
+        }
+      }).catch(() => alert('Could not copy link'));
+    }
+
+    let currentAttachmentTaskId = null;
+    async function openAddAttachmentModal(taskId) {
+      currentAttachmentTaskId = taskId;
+      const sel = document.getElementById('attachment-doc-select');
+      sel.innerHTML = '<option value="">Select document…</option>';
+      try {
+        const res = await fetch('/api/documents');
+        const data = await res.json();
+        (data.documents || []).forEach(d => {
+          const o = document.createElement('option');
+          o.value = d.id;
+          o.textContent = escapeHtml(d.original_name || d.filename);
+          sel.appendChild(o);
+        });
+      } catch (e) { console.warn(e); }
+      document.getElementById('modal-add-attachment').classList.add('visible');
+    }
+
+    let currentEditTaskId = null;
+    async function openEditTaskModal(task) {
+      currentEditTaskId = task.id;
+      document.getElementById('edit-task-title').value = task.title || '';
+      document.getElementById('edit-task-priority').value = (task.priority || 'medium').toLowerCase();
+      const parentSel = document.getElementById('edit-task-parent');
+      try {
+        const res = await fetch('/api/tasks');
+        const data = await res.json();
+        const projects = data.projects || [];
+        const areas = data.areas || [];
+        parentSel.innerHTML = '<option value="">Select project or area</option>';
+        projects.forEach(p => {
+          const o = document.createElement('option');
+          o.value = 'project:' + p.id;
+          o.textContent = 'Project: ' + escapeHtml(p.title);
+          parentSel.appendChild(o);
+        });
+        areas.forEach(a => {
+          const o = document.createElement('option');
+          o.value = 'area:' + a.id;
+          const projectTitle = a.project_id ? (projects.find(p => p.id === a.project_id) || {}).title : '';
+          o.textContent = projectTitle ? 'Area: ' + escapeHtml(a.title) + ' (in ' + escapeHtml(projectTitle) + ')' : 'Area: ' + escapeHtml(a.title);
+          parentSel.appendChild(o);
+        });
+        const currentVal = (task.parent_type || '') + ':' + (task.parent_id ?? '');
+        if (currentVal && currentVal !== ':') parentSel.value = currentVal;
+      } catch (e) { console.warn(e); }
+      document.getElementById('modal-edit-task').classList.add('visible');
+    }
+
+    async function duplicateTask(task) {
+      try {
+        const res = await fetch('/api/tasks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: task.title,
+            priority: task.priority || 'medium',
+            parent_type: task.parent_type,
+            parent_id: task.parent_id
+          })
+        });
+        const data = await res.json();
+        if (data.error) { alert(data.error); return; }
+        loadActive();
+      } catch (e) { alert('Could not duplicate task'); }
+    }
+
+    async function deleteTask(taskId) {
+      if (!confirm('Delete this task?')) return;
+      try {
+        const res = await fetch('/api/tasks/' + taskId, { method: 'DELETE' });
+        if (!res.ok) { const d = await res.json(); alert(d.detail || 'Could not delete'); return; }
+        loadActive();
+      } catch (e) { alert('Could not delete task'); }
+    }
+
+    let currentMoveTaskId = null;
+    async function openMoveTaskModal(task) {
+      currentMoveTaskId = task.id;
+      const parentSel = document.getElementById('move-task-parent');
+      try {
+        const res = await fetch('/api/tasks');
+        const data = await res.json();
+        const projects = data.projects || [];
+        const areas = data.areas || [];
+        parentSel.innerHTML = '<option value="">Select project or area</option>';
+        projects.forEach(p => {
+          const o = document.createElement('option');
+          o.value = 'project:' + p.id;
+          o.textContent = 'Project: ' + escapeHtml(p.title);
+          parentSel.appendChild(o);
+        });
+        areas.forEach(a => {
+          const o = document.createElement('option');
+          o.value = 'area:' + a.id;
+          const projectTitle = a.project_id ? (projects.find(p => p.id === a.project_id) || {}).title : '';
+          o.textContent = projectTitle ? 'Area: ' + escapeHtml(a.title) + ' (in ' + escapeHtml(projectTitle) + ')' : 'Area: ' + escapeHtml(a.title);
+          parentSel.appendChild(o);
+        });
+        const currentVal = (task.parent_type || '') + ':' + (task.parent_id ?? '');
+        if (currentVal && currentVal !== ':') parentSel.value = currentVal;
+      } catch (e) { console.warn(e); }
+      document.getElementById('modal-move-task').classList.add('visible');
     }
 
     function getTaskQuery() {
