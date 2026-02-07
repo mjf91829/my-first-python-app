@@ -59,7 +59,7 @@ def load_data() -> dict:
                         "parent_type": "area",
                         "parent_id": 1,
                     })
-                save_data(data)
+                _write_data(data)
         return data
 
     with FileLock(DATA_FILE.with_suffix(".lock"), shared=True):
@@ -76,16 +76,21 @@ def load_data() -> dict:
     return _normalize_data(data)
 
 
-def save_data(data: dict) -> None:
+def _write_data(data: dict) -> None:
+    """Write data to DATA_FILE. Caller must hold the lock if needed."""
     tmp = DATA_FILE.with_suffix(".tmp")
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+        tmp.replace(DATA_FILE)
+    except OSError as e:
+        logger.error("Failed to save data file %s: %s", DATA_FILE, e)
+        raise
+
+
+def save_data(data: dict) -> None:
     with FileLock(DATA_FILE.with_suffix(".lock")):
-        try:
-            with open(tmp, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2)
-            tmp.replace(DATA_FILE)
-        except OSError as e:
-            logger.error("Failed to save data file %s: %s", DATA_FILE, e)
-            raise
+        _write_data(data)
 
 
 def next_id(container_key: str, data: dict) -> int:
