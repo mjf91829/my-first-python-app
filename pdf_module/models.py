@@ -1,17 +1,19 @@
 """Pydantic models for PDF API."""
 
-from typing import Any, Literal
+from typing import Any
 
 from pydantic import BaseModel, Field
 
+from constants import LinkableType
+
 
 class DocumentLinkCreate(BaseModel):
-    linked_type: Literal["task", "project", "area"]
+    linked_type: LinkableType
     linked_id: int
 
 
 class DocumentLinkRemove(BaseModel):
-    linked_type: Literal["task", "project", "area"]
+    linked_type: LinkableType
     linked_id: int
 
 

@@ -6,6 +6,7 @@ import logging
 from fastapi import APIRouter, Body, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse, Response
 
+from constants import AREA, PROJECT, TASK
 from pdf_module.models import DocumentLinkCreate, DocumentLinkRemove, MarkupsSaveBody, SavePdfBody
 from pdf_module import service
 
@@ -101,8 +102,8 @@ async def remove_document_link(doc_id: int, body: DocumentLinkRemove):
 
 @router.get("/para/{linked_type}/{linked_id}/documents")
 async def get_para_documents(linked_type: str, linked_id: int):
-    if linked_type not in ("task", "project", "area"):
-        raise HTTPException(status_code=400, detail="linked_type must be task, project, or area")
+    if linked_type not in (TASK, PROJECT, AREA):
+        raise HTTPException(status_code=400, detail=f"linked_type must be {TASK}, {PROJECT}, or {AREA}")
     docs = service.get_documents_for_para(linked_type, linked_id)
     return {"documents": docs}
 

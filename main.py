@@ -216,6 +216,7 @@ async def move_to_archive(body: ArchiveMoveBody):
         archive_entry = {
             "id": next_id("archives", data),
             "type": "project",
+            "source_id": body.id,
             "title": container["title"],
             "goal": container.get("goal", ""),
             "deadline": container.get("deadline", ""),
@@ -240,6 +241,7 @@ async def move_to_archive(body: ArchiveMoveBody):
         archive_entry = {
             "id": next_id("archives", data),
             "type": "area",
+            "source_id": body.id,
             "title": container["title"],
             "goal": "",
             "deadline": "",

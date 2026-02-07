@@ -144,6 +144,61 @@
             "height": 0.03
           },
           "text": "test"
+        },
+        {
+          "id": "m_1gk9j8p60immlcucx12",
+          "page": 0,
+          "type": "highlight",
+          "bounds": {
+            "x": 0.17483660130718953,
+            "y": 0.20244107101902817,
+            "width": 0.22058823529411764,
+            "height": 0.05176767676767677
+          },
+          "color": "#ffeb3b"
+        },
+        {
+          "id": "m_7xh1mra5z2rmlcucxg8",
+          "page": 0,
+          "type": "highlight",
+          "bounds": {
+            "x": 0.2042483660130719,
+            "y": 0.3640572326351898,
+            "width": 0.17320261437908496,
+            "height": 0.03535353535353535
+          },
+          "color": "#ffeb3b"
+        },
+        {
+          "id": "m_qj6cneoautjmlcucxq6",
+          "page": 0,
+          "type": "highlight",
+          "bounds": {
+            "x": 0.3104575163398693,
+            "y": 0.5509259195038767,
+            "width": 0.15196078431372548,
+            "height": 0.030303030303030304
+          },
+          "color": "#ffeb3b"
+        }
+      ]
+    },
+    {
+      "document_id": 3,
+      "linked_type": "task",
+      "linked_id": 8,
+      "markups": [
+        {
+          "id": "m_f774623avcmmlcudhuu",
+          "page": 0,
+          "type": "highlight",
+          "bounds": {
+            "x": 0.10457516339869281,
+            "y": 0.17592591950387665,
+            "width": 0.3382352941176471,
+            "height": 0.14267676767676768
+          },
+          "color": "#ffeb3b"
         }
       ]
     }
