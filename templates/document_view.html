@@ -6,35 +6,51 @@
   <title>{{ doc.original_name or doc.filename }} - PDF Viewer</title>
   <style>
     * { box-sizing: border-box; }
-    body { margin: 0; font-family: system-ui, sans-serif; display: flex; flex-direction: column; height: 100vh; }
+    body { margin: 0; font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; display: flex; flex-direction: column; height: 100vh; }
     .toolbar {
       display: flex;
       align-items: center;
       gap: 0.5rem;
-      padding: 0.5rem 1rem;
-      background: #f5f5f5;
-      border-bottom: 1px solid #ddd;
+      padding: 8px 16px;
+      background: #fafafa;
+      border-bottom: 1px solid #e5e7eb;
       flex-wrap: wrap;
+      min-height: 48px;
     }
     .toolbar a, .toolbar button {
-      padding: 0.4rem 0.8rem;
+      padding: 6px 12px;
       text-decoration: none;
-      color: #333;
+      color: #374151;
       background: #fff;
-      border: 1px solid #ccc;
-      border-radius: 4px;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
       cursor: pointer;
-      font-size: 0.9rem;
+      font-size: 0.875rem;
     }
-    .toolbar a:hover, .toolbar button:hover { background: #eee; }
-    .toolbar button.active { background: #2563eb; color: #fff; border-color: #2563eb; }
-    .toolbar .back-link { margin-right: 0.5rem; }
+    .toolbar a:hover, .toolbar button:hover:not(:disabled) { background: #f3f4f6; }
+    .toolbar button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .toolbar button.active { background: #4f46e5; color: #fff; border-color: #4f46e5; }
+    .btn-primary { background: #4f46e5; color: #fff; border-color: #4f46e5; font-weight: 500; }
+    .btn-primary:hover { background: #4338ca; border-color: #4338ca; }
+    .btn-secondary { background: #fff; color: #374151; }
+    .toolbar-link { display: inline-flex; align-items: center; }
+    .toolbar-link-secondary { color: #6b7280; }
+    .toolbar .back-link { margin-right: 0.25rem; color: #6b7280; }
     .toolbar .zoom-controls { display: flex; align-items: center; gap: 0.25rem; }
     .toolbar .zoom-controls button { min-width: 2rem; }
-    .toolbar .zoom-value { font-size: 0.85rem; color: #666; min-width: 4ch; }
-    .toolbar .mode-group { display: flex; gap: 0.25rem; margin-left: 0.5rem; }
-    .toolbar .context-wrap { margin-left: auto; display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; color: #666; }
-    .toolbar .context-wrap select { padding: 0.35rem 0.5rem; border-radius: 4px; border: 1px solid #ccc; }
+    .toolbar .zoom-value { font-size: 0.8125rem; color: #6b7280; min-width: 4ch; }
+    .edit-mode-only { display: inline-flex; align-items: center; gap: 0.5rem; margin-left: 0.25rem; }
+    .toolbar .mode-group { display: flex; gap: 0.25rem; }
+    .save-indicator { font-size: 0.8125rem; color: #6b7280; margin-left: 0.25rem; display: inline-flex; align-items: center; gap: 0.35rem; }
+    .save-indicator--saved { color: #059669; }
+    .save-indicator--error { color: #dc2626; }
+    .save-indicator .save-retry { padding: 2px 6px; font-size: 0.75rem; background: transparent; border: none; color: #4f46e5; cursor: pointer; text-decoration: underline; }
+    .save-indicator .save-retry:hover { color: #4338ca; }
+    .save-indicator-dot { width: 6px; height: 6px; border-radius: 50%; background: #6b7280; animation: save-pulse 0.8s ease-in-out infinite; }
+    @keyframes save-pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+    .toolbar .context-wrap { margin-left: auto; display: flex; align-items: center; gap: 0.5rem; font-size: 0.8125rem; color: #6b7280; }
+    .toolbar .context-wrap select { padding: 6px 10px; border-radius: 6px; border: 1px solid #e5e7eb; font-size: 0.8125rem; }
+    .toolbar .context-wrap select:focus { outline: none; box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.2); }
     .pdf-container {
       flex: 1;
       overflow: hidden;
@@ -73,46 +89,48 @@
     .page-annotations.interactive { pointer-events: auto; }
     .page-annotations .anno-highlight {
       position: absolute;
-      background: rgba(255, 235, 59, 0.4);
-      border: 1px solid rgba(255, 193, 7, 0.8);
+      background: rgba(253, 224, 71, 0.35);
+      border: 1px solid rgba(250, 204, 21, 0.6);
       pointer-events: auto;
       cursor: pointer;
+      border-radius: 2px;
     }
     .page-annotations .anno-comment {
       position: absolute;
       width: 24px;
       height: 24px;
-      background: #ff9800;
+      background: #8b5cf6;
       border-radius: 50%;
       cursor: pointer;
       pointer-events: auto;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 14px;
+      font-size: 12px;
       color: #fff;
       transform: translate(-50%, -50%);
     }
-    .page-annotations .anno-comment.has-text { background: #f57c00; }
+    .page-annotations .anno-comment.has-text { background: #6d28d9; }
     .comment-popover {
       position: absolute;
       background: #fff;
-      border: 1px solid #ccc;
-      border-radius: 6px;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
       padding: 0.5rem 0.75rem;
       max-width: 280px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
       z-index: 10;
       pointer-events: auto;
-      font-size: 0.9rem;
+      font-size: 0.875rem;
     }
     .comment-popover .comment-actions { margin-top: 0.5rem; }
     .comment-popover .comment-actions button { margin-right: 0.25rem; font-size: 0.8rem; }
     .highlight-preview {
       position: absolute;
-      background: rgba(255, 235, 59, 0.5);
-      border: 1px dashed #f57c00;
+      background: rgba(253, 224, 71, 0.4);
+      border: 1px dashed #8b5cf6;
       pointer-events: none;
+      border-radius: 2px;
     }
   </style>
 </head>
@@ -125,11 +143,20 @@
       <button type="button" id="btn-zoom-in">+</button>
     </span>
     <button type="button" id="btn-print">Print</button>
-    <a href="/api/documents/{{ doc_id }}/file" download="{{ doc.original_name or doc.filename }}" id="btn-download">Download</a>
-    <span class="mode-group">
-      <button type="button" id="btn-mode-none">Cursor</button>
-      <button type="button" id="btn-mode-highlight">Highlight</button>
-      <button type="button" id="btn-mode-comment">Comment</button>
+    <a href="/api/documents/{{ doc_id }}/file" download="{{ doc.original_name or doc.filename }}" id="btn-download" class="toolbar-link">Download</a>
+    <a href="#" id="btn-download-with-markups" class="toolbar-link toolbar-link-secondary">Download with markups</a>
+    <button type="button" id="btn-save-pdf" class="toolbar-link btn-secondary">Save PDF</button>
+    <button type="button" id="btn-edit" class="btn-primary">Edit</button>
+    <span class="edit-mode-only" id="edit-mode-only" style="display: none;">
+      <span class="mode-group">
+        <button type="button" id="btn-mode-none">Cursor</button>
+        <button type="button" id="btn-mode-highlight">Highlight</button>
+        <button type="button" id="btn-mode-comment">Comment</button>
+      </span>
+      <button type="button" id="btn-undo" title="Undo">↶ Undo</button>
+      <button type="button" id="btn-redo" title="Redo">↷ Redo</button>
+      <span class="save-indicator" id="save-indicator" aria-live="polite"></span>
+      <button type="button" id="btn-done" class="btn-secondary">Done</button>
     </span>
     <div class="context-wrap" id="context-wrap">
       <label for="context-select">Markups for:</label>
@@ -168,20 +195,64 @@
     let pdfDoc = null;
     let scale = 1.0;
     let markups = [];
-    let linkedOptions = [];  // { linked_type, linked_id, title }
+    let linkedOptions = [];
     let currentLinkedType = LINKED_TYPE;
     let currentLinkedId = LINKED_ID;
-    let mode = 'none';  // 'none' | 'highlight' | 'comment'
+    let mode = 'none';
     let dragStart = null;
     let previewEl = null;
+    let isEditMode = false;
+    let undoStack = [];
+    let redoStack = [];
+    let saveStatus = 'idle';  // 'idle' | 'saving' | 'saved' | 'error'
+    let dirty = false;
+    let saveTimeout = null;
+    let isUndoRedo = false;
 
     const container = document.getElementById('pdf-container');
     const zoomValueEl = document.getElementById('zoom-value');
     const contextWrap = document.getElementById('context-wrap');
     const contextSelect = document.getElementById('context-select');
+    const editModeOnly = document.getElementById('edit-mode-only');
+    const saveIndicatorEl = document.getElementById('save-indicator');
 
     function updateZoomDisplay() {
       zoomValueEl.textContent = Math.round(scale * 100) + '%';
+    }
+
+    function updateToolbarForMode() {
+      const editBtn = document.getElementById('btn-edit');
+      const doneBtn = document.getElementById('btn-done');
+      if (isEditMode) {
+        editBtn.style.display = 'none';
+        editModeOnly.style.display = 'inline-flex';
+        doneBtn.style.display = '';
+      } else {
+        editBtn.style.display = '';
+        editModeOnly.style.display = 'none';
+        doneBtn.style.display = 'none';
+      }
+      document.getElementById('btn-download-with-markups').href = getDownloadWithMarkupsUrl();
+      document.querySelectorAll('.page-annotations').forEach(el => {
+        el.classList.toggle('interactive', isEditMode && mode !== 'none');
+      });
+      updateSaveIndicator();
+      updateUndoRedoButtons();
+    }
+
+    function updateUndoRedoButtons() {
+      const undoBtn = document.getElementById('btn-undo');
+      const redoBtn = document.getElementById('btn-redo');
+      if (undoBtn) undoBtn.disabled = undoStack.length === 0;
+      if (redoBtn) redoBtn.disabled = redoStack.length === 0;
+    }
+
+    function getDownloadWithMarkupsUrl() {
+      const params = new URLSearchParams();
+      if (currentLinkedType != null) params.set('linked_type', currentLinkedType);
+      if (currentLinkedId != null) params.set('linked_id', currentLinkedId);
+      const q = params.toString();
+      return `/api/documents/${DOC_ID}/file/with-markups` + (q ? '?' + q : '');
     }
 
     function getMarkupsUrl() {
@@ -203,9 +274,33 @@
       renderMarkups();
     }
 
-    async function saveMarkups() {
+    function updateSaveIndicator() {
+      if (!saveIndicatorEl) return;
+      const s = saveStatus;
+      saveIndicatorEl.className = 'save-indicator save-indicator--' + s;
+      if (s === 'saving') {
+        saveIndicatorEl.innerHTML = '<span class="save-indicator-dot"></span> Saving...';
+      } else if (s === 'saved') {
+        saveIndicatorEl.innerHTML = '<span class="save-indicator-check">✓</span> All changes saved';
+      } else if (s === 'error') {
+        saveIndicatorEl.innerHTML = 'Failed to save · <button type="button" class="save-retry">Retry</button>';
+      } else {
+        saveIndicatorEl.textContent = '';
+      }
+    }
+
+    function scheduleSave() {
+      dirty = true;
+      if (saveTimeout) clearTimeout(saveTimeout);
+      saveTimeout = setTimeout(performSave, 500);
+    }
+
+    async function performSave() {
+      if (!dirty && saveStatus !== 'error') return;
+      saveStatus = 'saving';
+      updateSaveIndicator();
       try {
-        await fetch(`/api/documents/${DOC_ID}/markups`, {
+        const res = await fetch(`/api/documents/${DOC_ID}/markups`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -214,9 +309,78 @@
             markups: markups,
           }),
         });
+        if (!res.ok) throw new Error(res.statusText);
+        dirty = false;
+        saveStatus = 'saved';
+        updateSaveIndicator();
+        performSavePdf().catch(e => console.error('PDF could not be saved', e));
       } catch (e) {
         console.error('Failed to save markups', e);
+        saveStatus = 'error';
+        updateSaveIndicator();
       }
+    }
+
+    async function performSavePdf() {
+      const btn = document.getElementById('btn-save-pdf');
+      if (btn) btn.disabled = true;
+      try {
+        const res = await fetch(`/api/documents/${DOC_ID}/save-pdf`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            linked_type: currentLinkedType,
+            linked_id: currentLinkedId,
+          }),
+        });
+        if (!res.ok) throw new Error(res.statusText || 'Save failed');
+        const data = await res.json();
+        if (saveIndicatorEl && btn) {
+          saveIndicatorEl.className = 'save-indicator save-indicator--saved';
+          saveIndicatorEl.innerHTML = '<span class="save-indicator-check">✓</span> PDF saved as new version';
+          setTimeout(updateSaveIndicator, 2500);
+        }
+        return data;
+      } catch (e) {
+        console.error('Failed to save PDF', e);
+        if (saveIndicatorEl && btn) {
+          saveIndicatorEl.className = 'save-indicator save-indicator--error';
+          saveIndicatorEl.textContent = 'Failed to save PDF';
+          setTimeout(updateSaveIndicator, 3000);
+        }
+        throw e;
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    }
+
+    function pushUndo() {
+      if (isUndoRedo) return;
+      undoStack.push(JSON.parse(JSON.stringify(markups)));
+      redoStack.length = 0;
+      updateUndoRedoButtons();
+    }
+
+    function undo() {
+      if (undoStack.length === 0) return;
+      isUndoRedo = true;
+      redoStack.push(JSON.parse(JSON.stringify(markups)));
+      markups = undoStack.pop();
+      isUndoRedo = false;
+      renderMarkups();
+      scheduleSave();
+      updateUndoRedoButtons();
+    }
+
+    function redo() {
+      if (redoStack.length === 0) return;
+      isUndoRedo = true;
+      undoStack.push(JSON.parse(JSON.stringify(markups)));
+      markups = redoStack.pop();
+      isUndoRedo = false;
+      renderMarkups();
+      scheduleSave();
+      updateUndoRedoButtons();
     }
 
     function id() {
@@ -225,10 +389,15 @@
 
     function setMode(m) {
       mode = m;
-      document.getElementById('btn-mode-none').classList.toggle('active', mode === 'none');
-      document.getElementById('btn-mode-highlight').classList.toggle('active', mode === 'highlight');
-      document.getElementById('btn-mode-comment').classList.toggle('active', mode === 'comment');
-      document.querySelectorAll('.page-annotations').forEach(el => el.classList.toggle('interactive', mode !== 'none'));
+      const btnNone = document.getElementById('btn-mode-none');
+      const btnHighlight = document.getElementById('btn-mode-highlight');
+      const btnComment = document.getElementById('btn-mode-comment');
+      if (btnNone) btnNone.classList.toggle('active', mode === 'none');
+      if (btnHighlight) btnHighlight.classList.toggle('active', mode === 'highlight');
+      if (btnComment) btnComment.classList.toggle('active', mode === 'comment');
+      document.querySelectorAll('.page-annotations').forEach(el => {
+        el.classList.toggle('interactive', isEditMode && mode !== 'none');
+      });
       if (previewEl) { previewEl.remove(); previewEl = null; }
     }
 
@@ -254,8 +423,8 @@
             div.style.top = (b.y * 100) + '%';
             div.style.width = (b.width * 100) + '%';
             div.style.height = (b.height * 100) + '%';
-            div.title = 'Click to delete';
-            div.addEventListener('click', (e) => { e.stopPropagation(); deleteMarkup(m.id); });
+            div.title = isEditMode ? 'Click to delete' : '';
+            div.addEventListener('click', (e) => { e.stopPropagation(); if (!isEditMode) return; deleteMarkup(m.id); });
             wrap.appendChild(div);
           } else if ((m.type === 'comment' || m.type === 'sticky_note') && m.bounds) {
             const b = m.bounds;
@@ -265,9 +434,10 @@
             dot.style.left = (b.x * 100) + '%';
             dot.style.top = (b.y * 100) + '%';
             dot.textContent = '💬';
-            dot.title = m.text || 'Add comment';
+            dot.title = m.text || (isEditMode ? 'Add comment' : '');
             dot.addEventListener('click', (e) => {
               e.stopPropagation();
+              if (!isEditMode) return;
               showCommentPopover(m, dot);
             });
             wrap.appendChild(dot);
@@ -304,8 +474,11 @@
       textarea.focus();
       saveBtn.addEventListener('click', () => {
         const idx = markups.findIndex(m => m.id === markup.id);
-        if (idx >= 0) markups[idx].text = textarea.value.trim();
-        saveMarkups();
+        if (idx >= 0) {
+          pushUndo();
+          markups[idx].text = textarea.value.trim();
+          scheduleSave();
+        }
         renderMarkups();
         pop.remove();
       });
@@ -316,14 +489,16 @@
     }
 
     function deleteMarkup(markupId) {
+      pushUndo();
       markups = markups.filter(m => m.id !== markupId);
-      saveMarkups();
+      scheduleSave();
       renderMarkups();
     }
 
     function addMarkup(m) {
+      pushUndo();
       markups.push(m);
-      saveMarkups();
+      scheduleSave();
       renderMarkups();
     }
 
@@ -370,7 +545,10 @@
           currentLinkedType = t;
           currentLinkedId = i;
         }
+        undoStack.length = 0;
+        redoStack.length = 0;
         loadMarkups();
+        document.getElementById('btn-download-with-markups').href = getDownloadWithMarkupsUrl();
       });
       if (linkedOptions.length === 0) contextWrap.style.display = 'none';
     }
@@ -383,7 +561,7 @@
       overlay.style.height = pageHeight + 'px';
 
       overlay.addEventListener('mousedown', (e) => {
-        if (mode !== 'highlight' && mode !== 'comment') return;
+        if (!isEditMode || (mode !== 'highlight' && mode !== 'comment')) return;
         const rect = overlay.getBoundingClientRect();
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
@@ -412,7 +590,7 @@
       });
 
       overlay.addEventListener('mousemove', (e) => {
-        if (mode !== 'highlight' || !dragStart || !previewEl) return;
+        if (!isEditMode || mode !== 'highlight' || !dragStart || !previewEl) return;
         const rect = overlay.getBoundingClientRect();
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
@@ -427,7 +605,7 @@
       });
 
       overlay.addEventListener('mouseup', (e) => {
-        if (mode !== 'highlight' || !dragStart || !previewEl) return;
+        if (!isEditMode || mode !== 'highlight' || !dragStart || !previewEl) return;
         const rect = overlay.getBoundingClientRect();
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
@@ -543,10 +721,48 @@
     document.getElementById('btn-zoom-in').addEventListener('click', zoomIn);
     document.getElementById('btn-zoom-out').addEventListener('click', zoomOut);
     document.getElementById('btn-print').addEventListener('click', () => window.print());
+    document.getElementById('btn-save-pdf').addEventListener('click', () => performSavePdf());
+    document.getElementById('btn-edit').addEventListener('click', () => {
+      isEditMode = true;
+      updateToolbarForMode();
+      setMode('none');
+    });
+    document.getElementById('btn-done').addEventListener('click', () => {
+      isEditMode = false;
+      setMode('none');
+      updateToolbarForMode();
+    });
     document.getElementById('btn-mode-none').addEventListener('click', () => setMode('none'));
     document.getElementById('btn-mode-highlight').addEventListener('click', () => setMode('highlight'));
     document.getElementById('btn-mode-comment').addEventListener('click', () => setMode('comment'));
+    document.getElementById('btn-undo').addEventListener('click', () => undo());
+    document.getElementById('btn-redo').addEventListener('click', () => redo());
 
+    document.addEventListener('keydown', (e) => {
+      if (!isEditMode) return;
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key === 'z') {
+          e.preventDefault();
+          if (e.shiftKey) redo();
+          else undo();
+        }
+      }
+    });
+
+    window.addEventListener('beforeunload', (e) => {
+      if (dirty || saveStatus === 'saving' || saveStatus === 'error') {
+        e.preventDefault();
+      }
+    });
+
+    saveIndicatorEl.addEventListener('click', (e) => {
+      if (e.target && e.target.classList && e.target.classList.contains('save-retry')) {
+        e.preventDefault();
+        performSave();
+      }
+    });
+
+    updateToolbarForMode();
     updateZoomDisplay();
   </script>
 </body>

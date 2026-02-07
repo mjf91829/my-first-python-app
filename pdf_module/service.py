@@ -1,9 +1,12 @@
 """PDF document service: upload, list, serve, link/unlink."""
 
 from datetime import datetime, timezone
+from io import BytesIO
 from pathlib import Path
 import re
 import uuid
+
+import pikepdf
 
 from data_access import UPLOAD_DIR, load_data, next_id, save_data
 
@@ -237,3 +240,169 @@ def set_markups(
     data["document_markups"] = records
     save_data(data)
     return True
+
+
+def _validate_markup_context(
+    doc_id: int,
+    linked_type: str | None,
+    linked_id: int | None,
+) -> bool:
+    """Same validation as set_markups: document exists and context is valid."""
+    data = load_data()
+    if not get_document(doc_id):
+        return False
+    if (linked_type is None) != (linked_id is None):
+        return False
+    if linked_type is not None and linked_id is not None:
+        if linked_type not in ("task", "project", "area"):
+            return False
+        links = data.get("document_links", [])
+        if not any(
+            lnk.get("document_id") == doc_id
+            and lnk.get("linked_type") == linked_type
+            and lnk.get("linked_id") == linked_id
+            for lnk in links
+        ):
+            return False
+    return True
+
+
+def _add_markups_to_pdf(pdf: pikepdf.Pdf, markups_list: list[dict]) -> None:
+    """Add markup annotations to pdf pages in place. Does not strip existing annotations."""
+    for page_index, page in enumerate(pdf.pages):
+        page_markups = [m for m in markups_list if m.get("page") == page_index]
+        if not page_markups:
+            continue
+        try:
+            mbox = page.MediaBox
+            if hasattr(mbox, "__iter__") and len(mbox) >= 4:
+                w = float(mbox[2] - mbox[0])
+                h = float(mbox[3] - mbox[1])
+            else:
+                w, h = 612.0, 792.0
+        except Exception:
+            w, h = 612.0, 792.0
+
+        if "/Annots" not in page:
+            page["/Annots"] = pikepdf.Array()
+
+        for m in page_markups:
+            bounds = m.get("bounds") or {}
+            x = float(bounds.get("x", 0))
+            y = float(bounds.get("y", 0))
+            bw = float(bounds.get("width", 0.01))
+            bh = float(bounds.get("height", 0.01))
+            llx = x * w
+            lly = (1 - y - bh) * h
+            urx = (x + bw) * w
+            ury = (1 - y) * h
+            rect = [llx, lly, urx, ury]
+
+            if m.get("type") == "highlight":
+                ann = pikepdf.Dictionary(
+                    Type=pikepdf.Name.Annot,
+                    Subtype=pikepdf.Name.Highlight,
+                    Rect=rect,
+                    QuadPoints=pikepdf.Array([llx, ury, urx, ury, llx, lly, urx, lly]),
+                    C=pikepdf.Array([1.0, 1.0, 0.0]),
+                )
+                page["/Annots"].append(pikepdf.Object(ann))
+            elif m.get("type") in ("comment", "sticky_note"):
+                ann = pikepdf.Dictionary(
+                    Type=pikepdf.Name.Annot,
+                    Subtype=pikepdf.Name.Text,
+                    Rect=rect,
+                    Contents=pikepdf.String(m.get("text") or ""),
+                    Name=pikepdf.Name.Comment,
+                )
+                page["/Annots"].append(pikepdf.Object(ann))
+
+
+def build_pdf_with_markups(
+    doc_id: int,
+    linked_type: str | None = None,
+    linked_id: int | None = None,
+) -> bytes:
+    """
+    Build a PDF that includes the given document's content plus current markups as annotations.
+    Returns PDF bytes. Raises if document not found or context invalid.
+    """
+    if not _validate_markup_context(doc_id, linked_type, linked_id):
+        raise ValueError("Document not found or invalid markup context")
+    path = get_document_path(doc_id)
+    if not path:
+        raise FileNotFoundError("Document file not found")
+    markups_list = get_markups(doc_id, linked_type=linked_type, linked_id=linked_id)
+
+    pdf = pikepdf.Pdf.open(path)
+    try:
+        _add_markups_to_pdf(pdf, markups_list)
+        buf = BytesIO()
+        pdf.save(buf)
+        return buf.getvalue()
+    finally:
+        pdf.close()
+
+
+def build_pdf_with_markups_for_save(
+    doc_id: int,
+    linked_type: str | None = None,
+    linked_id: int | None = None,
+) -> bytes:
+    """
+    Build a PDF for persisting as a new version: strip existing page annotations,
+    then add current context's markups from JSON. Use for save-new-version only.
+    """
+    if not _validate_markup_context(doc_id, linked_type, linked_id):
+        raise ValueError("Document not found or invalid markup context")
+    path = get_document_path(doc_id)
+    if not path:
+        raise FileNotFoundError("Document file not found")
+    markups_list = get_markups(doc_id, linked_type=linked_type, linked_id=linked_id)
+
+    pdf = pikepdf.Pdf.open(path)
+    try:
+        for page in pdf.pages:
+            if "/Annots" in page:
+                page["/Annots"] = pikepdf.Array()
+        _add_markups_to_pdf(pdf, markups_list)
+        buf = BytesIO()
+        pdf.save(buf)
+        return buf.getvalue()
+    finally:
+        pdf.close()
+
+
+def save_document_pdf_version(
+    doc_id: int,
+    linked_type: str | None = None,
+    linked_id: int | None = None,
+) -> dict:
+    """
+    Build PDF with current context's markups (strip then add), write to a new file,
+    and update the document to point to it. Previous filename is appended to doc.versions.
+    Returns {"ok": True, "filename": new_filename}. Does not delete the old file.
+    """
+    if not _validate_markup_context(doc_id, linked_type, linked_id):
+        raise ValueError("Document not found or invalid markup context")
+    doc = get_document(doc_id)
+    if not doc:
+        raise ValueError("Document not found")
+    pdf_bytes = build_pdf_with_markups_for_save(
+        doc_id, linked_type=linked_type, linked_id=linked_id
+    )
+    original_name = doc.get("original_name", doc.get("filename", "document.pdf"))
+    new_filename = safe_filename(original_name)
+    out_path = UPLOAD_DIR / new_filename
+    ensure_upload_dir()
+    out_path.write_bytes(pdf_bytes)
+
+    data = load_data()
+    doc_ref = next((d for d in data["documents"] if d["id"] == doc_id), None)
+    if not doc_ref:
+        raise ValueError("Document not found")
+    doc_ref.setdefault("versions", [])
+    doc_ref["versions"].append(doc_ref["filename"])
+    doc_ref["filename"] = new_filename
+    save_data(data)
+    return {"ok": True, "filename": new_filename}
