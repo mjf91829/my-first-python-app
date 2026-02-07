@@ -347,7 +347,15 @@
   </main>
   <script>
     const preloadEl = document.getElementById('dashboard-preload');
-    const preload = preloadEl ? JSON.parse(preloadEl.textContent) : {};
+    let preload = {};
+    if (preloadEl) {
+      try {
+        preload = JSON.parse(preloadEl.textContent);
+      } catch (e) {
+        console.warn('Dashboard preload JSON invalid, using empty data:', e);
+      }
+    }
+    if (!preload || typeof preload !== 'object') preload = {};
     const { projects: preloadedProjects = [], areas: preloadedAreas = [], tasks: preloadedTasks = [] } = preload;
 
     const btnDashboard = document.getElementById('btn-dashboard');
