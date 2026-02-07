@@ -1,91 +1,258 @@
-"""FastAPI task app: tasks stored in JSON, mocked AI suggestion."""
+"""FastAPI PARA app: Projects, Areas, Resources, Archives; tasks as children of Project or Area."""
 
-import json
+from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-TASKS_FILE = Path(__file__).resolve().parent / "tasks.json"
-
-
-class TaskCreate(BaseModel):
-    title: str
-    priority: str
-
-
-class Task(TaskCreate):
-    id: int
-
-
-def load_tasks() -> list[dict]:
-    if not TASKS_FILE.exists():
-        return []
-    with open(TASKS_FILE, encoding="utf-8") as f:
-        return json.load(f)
-
-
-def save_tasks(tasks: list[dict]) -> None:
-    with open(TASKS_FILE, "w", encoding="utf-8") as f:
-        json.dump(tasks, f, indent=2)
-
-
-def next_id(tasks: list[dict]) -> int:
-    if not tasks:
-        return 1
-    return max(t["id"] for t in tasks) + 1
-
-
-app = FastAPI(title="Task App")
-
+from data_access import load_data, next_id, save_data
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 
 
+# Pydantic models
+class ProjectCreate(BaseModel):
+    title: str
+    goal: str
+    deadline: str
+
+
+class AreaCreate(BaseModel):
+    title: str
+
+
+class ResourceCreate(BaseModel):
+    title: str
+    url: str = ""
+    notes: str = ""
+
+
+class TaskCreate(BaseModel):
+    title: str
+    priority: str = "medium"
+    parent_type: str
+    parent_id: int
+
+
+class ArchiveMoveBody(BaseModel):
+    type: str
+    id: int
+
+
+app = FastAPI(title="PARA Task App")
+
+from pdf_module.routes import router as pdf_router
+
+app.include_router(pdf_router, prefix="/api")
+
+
+def _render_template(name: str, request: Request, **kwargs):
+    from jinja2 import Environment, FileSystemLoader
+    env = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)))
+    template = env.get_template(name)
+    return template.render(request=request, **kwargs)
+
+
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
-    from jinja2 import Environment, FileSystemLoader
+    return _render_template("index.html", request=request)
 
-    env = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)))
-    template = env.get_template("index.html")
-    tasks = load_tasks()
-    return template.render(request=request, tasks=tasks)
+
+@app.get("/documents/{doc_id}", response_class=HTMLResponse)
+async def document_view(request: Request, doc_id: int):
+    from pdf_module import service
+    doc = service.get_document(doc_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return _render_template("document_view.html", request=request, doc_id=doc_id, doc=doc)
+
+
+@app.get("/api/projects")
+async def get_projects(sort: str | None = None):
+    data = load_data()
+    projects = list(data["projects"])
+    if sort == "deadline":
+        projects.sort(key=lambda p: p.get("deadline", ""))
+    elif sort == "title":
+        projects.sort(key=lambda p: p.get("title", "").lower())
+    return {"projects": projects}
+
+
+@app.post("/api/projects")
+async def create_project(project: ProjectCreate):
+    data = load_data()
+    new_id = next_id("projects", data)
+    new_project = {
+        "id": new_id,
+        "title": project.title,
+        "goal": project.goal,
+        "deadline": project.deadline,
+    }
+    data["projects"].append(new_project)
+    save_data(data)
+    return new_project
+
+
+@app.get("/api/areas")
+async def get_areas(sort: str | None = None):
+    data = load_data()
+    areas = list(data["areas"])
+    if sort == "title":
+        areas.sort(key=lambda a: a.get("title", "").lower())
+    return {"areas": areas}
+
+
+@app.post("/api/areas")
+async def create_area(area: AreaCreate):
+    data = load_data()
+    new_id = next_id("areas", data)
+    new_area = {"id": new_id, "title": area.title}
+    data["areas"].append(new_area)
+    save_data(data)
+    return new_area
+
+
+@app.get("/api/resources")
+async def get_resources():
+    data = load_data()
+    return {"resources": data["resources"]}
+
+
+@app.post("/api/resources")
+async def create_resource(resource: ResourceCreate):
+    data = load_data()
+    new_id = next_id("resources", data)
+    new_resource = {
+        "id": new_id,
+        "title": resource.title,
+        "url": resource.url or "",
+        "notes": resource.notes or "",
+    }
+    data["resources"].append(new_resource)
+    save_data(data)
+    return new_resource
+
+
+@app.get("/api/archives")
+async def get_archives():
+    data = load_data()
+    return {"archives": data["archives"]}
+
+
+@app.post("/api/archives/move")
+async def move_to_archive(body: ArchiveMoveBody):
+    data = load_data()
+    if body.type == "project":
+        container = next((p for p in data["projects"] if p["id"] == body.id), None)
+        if not container:
+            return {"error": "Project not found"}
+        tasks_snapshot = [t for t in data["tasks"] if t.get("parent_type") == "project" and t.get("parent_id") == body.id]
+        archive_entry = {
+            "id": next_id("archives", data),
+            "type": "project",
+            "title": container["title"],
+            "goal": container.get("goal", ""),
+            "deadline": container.get("deadline", ""),
+            "archived_at": datetime.now(tz=timezone.utc).isoformat(),
+            "tasks": tasks_snapshot,
+        }
+    elif body.type == "area":
+        container = next((a for a in data["areas"] if a["id"] == body.id), None)
+        if not container:
+            return {"error": "Area not found"}
+        tasks_snapshot = [t for t in data["tasks"] if t.get("parent_type") == "area" and t.get("parent_id") == body.id]
+        archive_entry = {
+            "id": next_id("archives", data),
+            "type": "area",
+            "title": container["title"],
+            "goal": "",
+            "deadline": "",
+            "archived_at": datetime.now(tz=timezone.utc).isoformat(),
+            "tasks": tasks_snapshot,
+        }
+    else:
+        return {"error": "Invalid type; use project or area"}
+    data["archives"].append(archive_entry)
+    data["projects"] = [p for p in data["projects"] if p["id"] != body.id] if body.type == "project" else data["projects"]
+    data["areas"] = [a for a in data["areas"] if a["id"] != body.id] if body.type == "area" else data["areas"]
+    data["tasks"] = [t for t in data["tasks"] if not (
+        (body.type == "project" and t.get("parent_type") == "project" and t.get("parent_id") == body.id) or
+        (body.type == "area" and t.get("parent_type") == "area" and t.get("parent_id") == body.id)
+    )]
+    save_data(data)
+    return {"ok": True, "archived": archive_entry}
 
 
 @app.get("/api/tasks")
-async def get_tasks():
-    return {"tasks": load_tasks()}
+async def get_tasks(
+    parent_type: str | None = None,
+    parent_id: int | None = None,
+    priority: str | None = None,
+    sort: str | None = None,
+):
+    data = load_data()
+    tasks = list(data["tasks"])
+    projects = {p["id"]: p for p in data["projects"]}
+    areas = {a["id"]: a for a in data["areas"]}
+    if parent_type:
+        tasks = [t for t in tasks if t.get("parent_type") == parent_type]
+    if parent_id is not None:
+        tasks = [t for t in tasks if t.get("parent_id") == parent_id]
+    if priority:
+        tasks = [t for t in tasks if (t.get("priority") or "medium").lower() == priority.lower()]
+    if sort == "deadline":
+        def deadline_key(t):
+            pt, pid = t.get("parent_type"), t.get("parent_id")
+            if pt == "project" and pid and pid in projects:
+                return projects[pid].get("deadline", "9999-99-99")
+            return "9999-99-99"
+        tasks.sort(key=deadline_key)
+    elif sort == "priority":
+        order = {"high": 0, "medium": 1, "low": 2}
+        tasks.sort(key=lambda t: order.get((t.get("priority") or "medium").lower(), 1))
+    elif sort == "title":
+        tasks.sort(key=lambda t: (t.get("title") or "").lower())
+    return {"tasks": tasks, "projects": list(projects.values()), "areas": list(areas.values())}
 
 
 @app.post("/api/tasks")
 async def create_task(task: TaskCreate):
-    tasks = load_tasks()
+    data = load_data()
+    if task.parent_type == "project":
+        if not any(p["id"] == task.parent_id for p in data["projects"]):
+            return {"error": "Project not found"}
+    elif task.parent_type == "area":
+        if not any(a["id"] == task.parent_id for a in data["areas"]):
+            return {"error": "Area not found"}
+    else:
+        return {"error": "parent_type must be project or area"}
+    new_id = next_id("tasks", data)
     new_task = {
-        "id": next_id(tasks),
+        "id": new_id,
         "title": task.title,
-        "priority": task.priority,
+        "priority": task.priority or "medium",
+        "parent_type": task.parent_type,
+        "parent_id": task.parent_id,
     }
-    tasks.append(new_task)
-    save_tasks(tasks)
+    data["tasks"].append(new_task)
+    save_data(data)
     return new_task
 
 
 @app.get("/api/tasks/{task_id}/suggest")
 async def suggest_when(task_id: int):
-    """Mock AI suggestion for when to do the task."""
-    tasks = load_tasks()
-    task = next((t for t in tasks if t["id"] == task_id), None)
+    data = load_data()
+    task = next((t for t in data["tasks"] if t["id"] == task_id), None)
     if not task:
         return {"error": "Task not found"}
-    # Mock: suggest based on priority
     suggestions = {
         "high": "Do this today, ideally in the next 2 hours.",
         "medium": "Schedule for this week; block 1–2 hours.",
         "low": "Fit it in when you have spare time or next week.",
     }
-    priority = task.get("priority", "medium").lower()
+    priority = (task.get("priority") or "medium").lower()
     suggestion = suggestions.get(priority, suggestions["medium"])
     return {"task_id": task_id, "suggestion": suggestion}
 

@@ -3,104 +3,590 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Task Manager</title>
+  <title>PARA Task Manager</title>
   <style>
     * { box-sizing: border-box; }
-    body { font-family: system-ui, sans-serif; max-width: 560px; margin: 2rem auto; padding: 0 1rem; }
-    h1 { margin-bottom: 1.5rem; }
-    form { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
-    input[type="text"] { flex: 1; min-width: 180px; padding: 0.5rem; }
-    select { padding: 0.5rem; }
-    button { padding: 0.5rem 1rem; cursor: pointer; }
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { margin-bottom: 0.5rem; }
+    .view-toggle { margin-bottom: 1.5rem; }
+    .view-toggle button { padding: 0.5rem 1rem; margin-right: 0.5rem; cursor: pointer; border: 1px solid #ccc; background: #f5f5f5; border-radius: 4px; }
+    .view-toggle button.active { background: #333; color: #fff; border-color: #333; }
+    .panel { display: none; }
+    .panel.visible { display: block; }
+    .filters { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1rem; align-items: center; }
+    .filters label { font-size: 0.9rem; }
+    .filters select { padding: 0.35rem 0.5rem; }
+    form { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; align-items: flex-end; }
+    form input[type="text"], form input[type="url"], form input[type="date"] { flex: 1; min-width: 120px; padding: 0.5rem; }
+    form select { padding: 0.5rem; min-width: 100px; }
+    form textarea { width: 100%; min-height: 60px; padding: 0.5rem; }
+    button { padding: 0.5rem 1rem; cursor: pointer; border-radius: 4px; border: 1px solid #ccc; background: #f5f5f5; }
+    button.primary { background: #333; color: #fff; border-color: #333; }
+    button.archive-btn { font-size: 0.8rem; margin-left: auto; }
     ul { list-style: none; padding: 0; margin: 0; }
-    li { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; padding: 0.6rem; border: 1px solid #ddd; border-radius: 6px; margin-bottom: 0.5rem; }
-    li .priority { font-size: 0.85rem; text-transform: uppercase; margin-left: 0.25rem; }
-    .suggest-btn { font-size: 0.85rem; margin-left: auto; }
-    .suggestion { width: 100%; margin-top: 0.25rem; padding: 0.5rem; background: #f0f7ff; border-radius: 4px; font-size: 0.9rem; }
+    .container-card { border: 1px solid #ddd; border-radius: 8px; margin-bottom: 1rem; padding: 1rem; }
+    .container-card.project { border-left: 4px solid #2c5; }
+    .container-card.area { border-left: 4px solid #58c; }
+    .container-header { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.5rem; }
+    .container-title { font-weight: bold; font-size: 1.05rem; }
+    .container-meta { font-size: 0.85rem; color: #666; }
+    .task-list { margin-top: 0.5rem; padding-left: 0.5rem; }
+    .task-item { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; padding: 0.5rem; border: 1px solid #eee; border-radius: 6px; margin-bottom: 0.4rem; }
+    .task-item .priority { font-size: 0.8rem; text-transform: uppercase; }
+    .suggest-btn { font-size: 0.8rem; margin-left: auto; }
+    .suggestion { width: 100%; margin-top: 0.25rem; padding: 0.5rem; background: #f0f7ff; border-radius: 4px; font-size: 0.85rem; }
     .error { color: #c00; }
+    .section-title { font-size: 1rem; margin: 1.25rem 0 0.5rem; color: #555; }
+    .resource-item, .archive-item { padding: 0.6rem; border: 1px solid #eee; border-radius: 6px; margin-bottom: 0.5rem; }
+    .archive-item .archived-tasks { margin-top: 0.5rem; padding-left: 0.75rem; font-size: 0.9rem; display: none; }
+    .archive-item.expanded .archived-tasks { display: block; }
+    .form-section { margin-bottom: 1.25rem; }
+    .form-section h3 { font-size: 0.95rem; margin-bottom: 0.5rem; }
+    .document-item { padding: 0.6rem; border: 1px solid #eee; border-radius: 6px; margin-bottom: 0.5rem; }
+    .document-item .doc-name { font-weight: bold; }
+    .document-item .doc-meta { font-size: 0.85rem; color: #666; margin: 0.25rem 0; }
+    .document-item .doc-linked { margin: 0.5rem 0; }
+    .document-item .doc-linked .link-chip { display: inline-flex; align-items: center; gap: 0.25rem; margin: 0.2rem 0.2rem 0 0; padding: 0.2rem 0.4rem; background: #e8f0fe; border-radius: 4px; font-size: 0.85rem; }
+    .document-item .doc-linked .link-chip .unlink-btn { background: none; border: none; cursor: pointer; color: #666; padding: 0 0.2rem; font-size: 0.9rem; }
+    .document-item .doc-link-form { display: flex; flex-wrap: wrap; gap: 0.25rem; align-items: center; margin-top: 0.5rem; font-size: 0.9rem; }
+    .document-item .doc-link-form select { padding: 0.25rem 0.5rem; }
   </style>
 </head>
 <body>
-  <h1>Task Manager</h1>
-  <form id="task-form">
-    <input type="text" id="title" name="title" placeholder="Task name" required>
-    <select id="priority" name="priority">
-      <option value="high">High</option>
-      <option value="medium" selected>Medium</option>
-      <option value="low">Low</option>
-    </select>
-    <button type="submit">Add task</button>
-  </form>
-  <h2>Tasks</h2>
-  <ul id="task-list">
-    {% for task in tasks %}
-    <li data-id="{{ task.id }}">
-      <span><strong>{{ task.title }}</strong><span class="priority">({{ task.priority }})</span></span>
-      <button type="button" class="suggest-btn" data-id="{{ task.id }}">When should I do this?</button>
-      <div class="suggestion" id="suggestion-{{ task.id }}" style="display: none;"></div>
-    </li>
-    {% endfor %}
-  </ul>
+  <h1>PARA Task Manager</h1>
+  <div class="view-toggle">
+    <button type="button" id="btn-active" class="active">Active (Projects & Areas)</button>
+    <button type="button" id="btn-reference">Reference (Resources & Archives)</button>
+    <button type="button" id="btn-documents">Documents</button>
+  </div>
+
+  <div id="panel-active" class="panel visible">
+    <div class="form-section">
+      <h3>Create project</h3>
+      <form id="form-project">
+        <input type="text" id="project-title" placeholder="Title" required>
+        <input type="text" id="project-goal" placeholder="Goal" required>
+        <input type="date" id="project-deadline" required>
+        <button type="submit" class="primary">Add project</button>
+      </form>
+    </div>
+    <div class="form-section">
+      <h3>Create area</h3>
+      <form id="form-area">
+        <input type="text" id="area-title" placeholder="Area (e.g. Work, Health)" required>
+        <button type="submit" class="primary">Add area</button>
+      </form>
+    </div>
+    <div class="form-section">
+      <h3>Add task</h3>
+      <form id="form-task">
+        <input type="text" id="task-title" placeholder="Task name" required>
+        <select id="task-priority">
+          <option value="high">High</option>
+          <option value="medium" selected>Medium</option>
+          <option value="low">Low</option>
+        </select>
+        <select id="task-parent" required>
+          <option value="">Select project or area</option>
+        </select>
+        <button type="submit" class="primary">Add task</button>
+      </form>
+    </div>
+    <div class="filters">
+      <label>Filter priority:</label>
+      <select id="filter-priority">
+        <option value="">All</option>
+        <option value="high">High</option>
+        <option value="medium">Medium</option>
+        <option value="low">Low</option>
+      </select>
+      <label>Filter container:</label>
+      <select id="filter-container">
+        <option value="">All</option>
+      </select>
+      <label>Sort:</label>
+      <select id="sort-by">
+        <option value="">Default</option>
+        <option value="deadline">Deadline</option>
+        <option value="priority">Priority</option>
+        <option value="title">Title</option>
+      </select>
+    </div>
+    <div id="active-content">
+      <div class="section-title">Projects</div>
+      <div id="projects-list"></div>
+      <div class="section-title">Areas</div>
+      <div id="areas-list"></div>
+    </div>
+  </div>
+
+  <div id="panel-documents" class="panel">
+    <div class="form-section">
+      <h3>Upload PDF</h3>
+      <form id="form-document-upload">
+        <input type="file" id="document-file" accept=".pdf" required>
+        <button type="submit" class="primary">Upload</button>
+      </form>
+    </div>
+    <div class="section-title">Documents</div>
+    <div id="documents-list"></div>
+  </div>
+
+  <div id="panel-reference" class="panel">
+    <div class="form-section">
+      <h3>Create resource</h3>
+      <form id="form-resource">
+        <input type="text" id="resource-title" placeholder="Title" required>
+        <input type="url" id="resource-url" placeholder="URL (optional)">
+        <textarea id="resource-notes" placeholder="Notes (optional)"></textarea>
+        <button type="submit" class="primary">Add resource</button>
+      </form>
+    </div>
+    <div class="section-title">Resources</div>
+    <div id="resources-list"></div>
+    <div class="section-title">Archives</div>
+    <div id="archives-list"></div>
+  </div>
+
   <script>
-    const form = document.getElementById('task-form');
-    const list = document.getElementById('task-list');
+    const btnActive = document.getElementById('btn-active');
+    const btnReference = document.getElementById('btn-reference');
+    const btnDocuments = document.getElementById('btn-documents');
+    const panelActive = document.getElementById('panel-active');
+    const panelReference = document.getElementById('panel-reference');
+    const panelDocuments = document.getElementById('panel-documents');
+    const taskParent = document.getElementById('task-parent');
+    const filterContainer = document.getElementById('filter-container');
+    const filterPriority = document.getElementById('filter-priority');
+    const sortBy = document.getElementById('sort-by');
 
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const title = document.getElementById('title').value.trim();
-      const priority = document.getElementById('priority').value;
-      if (!title) return;
-      const res = await fetch('/api/tasks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, priority })
-      });
-      if (!res.ok) return;
-      const task = await res.json();
-      const li = document.createElement('li');
-      li.dataset.id = task.id;
-      li.innerHTML = `
-        <span><strong>${escapeHtml(task.title)}</strong><span class="priority">(${task.priority})</span></span>
-        <button type="button" class="suggest-btn" data-id="${task.id}">When should I do this?</button>
-        <div class="suggestion" id="suggestion-${task.id}" style="display: none;"></div>
-      `;
-      list.appendChild(li);
-      form.reset();
-    });
-
-    list.addEventListener('click', (e) => {
-      if (e.target.classList.contains('suggest-btn')) {
-        const id = parseInt(e.target.dataset.id, 10);
-        const li = e.target.closest('li');
-        fetchSuggestion(id, li);
-      }
-    });
-
-    async function fetchSuggestion(taskId, li) {
-      const box = li.querySelector('.suggestion');
-      box.style.display = 'block';
-      box.textContent = 'Loading…';
-      box.classList.remove('error');
-      try {
-        const res = await fetch(`/api/tasks/${taskId}/suggest`);
-        const data = await res.json();
-        if (data.error) {
-          box.textContent = data.error;
-          box.classList.add('error');
-        } else {
-          box.textContent = data.suggestion;
-        }
-      } catch (err) {
-        box.textContent = 'Could not get suggestion.';
-        box.classList.add('error');
-      }
+    function setView(view) {
+      const isActive = view === 'active';
+      const isReference = view === 'reference';
+      const isDocuments = view === 'documents';
+      btnActive.classList.toggle('active', isActive);
+      btnReference.classList.toggle('active', isReference);
+      btnDocuments.classList.toggle('active', isDocuments);
+      panelActive.classList.toggle('visible', isActive);
+      panelReference.classList.toggle('visible', isReference);
+      panelDocuments.classList.toggle('visible', isDocuments);
+      if (isActive) loadActive();
+      else if (isReference) loadReference();
+      else if (isDocuments) loadDocuments();
     }
+    btnActive.addEventListener('click', () => setView('active'));
+    btnReference.addEventListener('click', () => setView('reference'));
+    btnDocuments.addEventListener('click', () => setView('documents'));
 
     function escapeHtml(s) {
       const div = document.createElement('div');
       div.textContent = s;
       return div.innerHTML;
     }
+
+    function buildTaskLi(task) {
+      const li = document.createElement('div');
+      li.className = 'task-item';
+      li.dataset.id = task.id;
+      li.innerHTML = `
+        <span><strong>${escapeHtml(task.title)}</strong> <span class="priority">(${escapeHtml(task.priority || 'medium')})</span></span>
+        <button type="button" class="suggest-btn" data-id="${task.id}">When should I do this?</button>
+        <div class="suggestion" id="suggestion-${task.id}" style="display: none;"></div>
+      `;
+      const box = li.querySelector('.suggestion');
+      li.querySelector('.suggest-btn').addEventListener('click', () => fetchSuggestion(task.id, box));
+      return li;
+    }
+
+    async function fetchSuggestion(taskId, boxEl) {
+      boxEl.style.display = 'block';
+      boxEl.textContent = 'Loading…';
+      boxEl.classList.remove('error');
+      try {
+        const res = await fetch(`/api/tasks/${taskId}/suggest`);
+        const data = await res.json();
+        if (data.error) {
+          boxEl.textContent = data.error;
+          boxEl.classList.add('error');
+        } else {
+          boxEl.textContent = data.suggestion;
+        }
+      } catch (err) {
+        boxEl.textContent = 'Could not get suggestion.';
+        boxEl.classList.add('error');
+      }
+    }
+
+    function getTaskQuery() {
+      const params = new URLSearchParams();
+      const priority = filterPriority.value;
+      const sort = sortBy.value;
+      if (priority) params.set('priority', priority);
+      if (sort) params.set('sort', sort);
+      const containerVal = filterContainer.value;
+      if (containerVal) {
+        const [type, id] = containerVal.split(':');
+        if (type && id) {
+          params.set('parent_type', type);
+          params.set('parent_id', id);
+        }
+      }
+      return params.toString();
+    }
+
+    function fillParentDropdown(projects, areas) {
+      const opt = document.createElement('option');
+      opt.value = '';
+      opt.textContent = 'Select project or area';
+      taskParent.innerHTML = '';
+      taskParent.appendChild(opt);
+      projects.forEach(p => {
+        const o = document.createElement('option');
+        o.value = `project:${p.id}`;
+        o.textContent = `Project: ${escapeHtml(p.title)}`;
+        taskParent.appendChild(o);
+      });
+      areas.forEach(a => {
+        const o = document.createElement('option');
+        o.value = `area:${a.id}`;
+        o.textContent = `Area: ${escapeHtml(a.title)}`;
+        taskParent.appendChild(o);
+      });
+    }
+
+    function fillFilterContainer(projects, areas) {
+      filterContainer.innerHTML = '';
+      const all = document.createElement('option');
+      all.value = '';
+      all.textContent = 'All';
+      filterContainer.appendChild(all);
+      projects.forEach(p => {
+        const o = document.createElement('option');
+        o.value = `project:${p.id}`;
+        o.textContent = `Project: ${escapeHtml(p.title)}`;
+        filterContainer.appendChild(o);
+      });
+      areas.forEach(a => {
+        const o = document.createElement('option');
+        o.value = `area:${a.id}`;
+        o.textContent = `Area: ${escapeHtml(a.title)}`;
+        filterContainer.appendChild(o);
+      });
+    }
+
+    async function loadActive() {
+      const q = getTaskQuery();
+      const res = await fetch(`/api/tasks?${q}`);
+      const data = await res.json();
+      const tasks = data.tasks || [];
+      const projects = data.projects || [];
+      const areas = data.areas || [];
+      fillParentDropdown(projects, areas);
+      fillFilterContainer(projects, areas);
+
+      const projectsList = document.getElementById('projects-list');
+      const areasList = document.getElementById('areas-list');
+      projectsList.innerHTML = '';
+      areasList.innerHTML = '';
+
+      const tasksByProject = {};
+      const tasksByArea = {};
+      tasks.forEach(t => {
+        if (t.parent_type === 'project') {
+          if (!tasksByProject[t.parent_id]) tasksByProject[t.parent_id] = [];
+          tasksByProject[t.parent_id].push(t);
+        } else {
+          if (!tasksByArea[t.parent_id]) tasksByArea[t.parent_id] = [];
+          tasksByArea[t.parent_id].push(t);
+        }
+      });
+
+      projects.forEach(p => {
+        const card = document.createElement('div');
+        card.className = 'container-card project';
+        card.innerHTML = `
+          <div class="container-header">
+            <span class="container-title">${escapeHtml(p.title)}</span>
+            <button type="button" class="archive-btn" data-type="project" data-id="${p.id}">Move to Archive</button>
+          </div>
+          <div class="container-meta">Goal: ${escapeHtml(p.goal || '')} · Deadline: ${escapeHtml(p.deadline || '')}</div>
+          <div class="task-list" data-parent="project" data-id="${p.id}"></div>
+        `;
+        const list = card.querySelector('.task-list');
+        (tasksByProject[p.id] || []).forEach(t => list.appendChild(buildTaskLi(t)));
+        card.querySelector('.archive-btn').addEventListener('click', () => moveToArchive('project', p.id));
+        projectsList.appendChild(card);
+      });
+
+      areas.forEach(a => {
+        const card = document.createElement('div');
+        card.className = 'container-card area';
+        card.innerHTML = `
+          <div class="container-header">
+            <span class="container-title">${escapeHtml(a.title)}</span>
+            <button type="button" class="archive-btn" data-type="area" data-id="${a.id}">Move to Archive</button>
+          </div>
+          <div class="task-list" data-parent="area" data-id="${a.id}"></div>
+        `;
+        const list = card.querySelector('.task-list');
+        (tasksByArea[a.id] || []).forEach(t => list.appendChild(buildTaskLi(t)));
+        card.querySelector('.archive-btn').addEventListener('click', () => moveToArchive('area', a.id));
+        areasList.appendChild(card);
+      });
+    }
+
+    async function moveToArchive(type, id) {
+      const res = await fetch('/api/archives/move', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, id })
+      });
+      const data = await res.json();
+      if (data.error) {
+        alert(data.error);
+        return;
+      }
+      loadActive();
+    }
+
+    async function loadReference() {
+      const [tasksRes, resourcesRes, archivesRes] = await Promise.all([
+        fetch('/api/tasks'),
+        fetch('/api/resources'),
+        fetch('/api/archives')
+      ]);
+      const resources = (await resourcesRes.json()).resources || [];
+      const archives = (await archivesRes.json()).archives || [];
+
+      const resourcesList = document.getElementById('resources-list');
+      resourcesList.innerHTML = '';
+      resources.forEach(r => {
+        const div = document.createElement('div');
+        div.className = 'resource-item';
+        div.innerHTML = `
+          <strong>${escapeHtml(r.title)}</strong>
+          ${r.url ? `<br><a href="${escapeHtml(r.url)}" target="_blank" rel="noopener">${escapeHtml(r.url)}</a>` : ''}
+          ${r.notes ? `<p style="margin:0.25rem 0 0;font-size:0.9rem;">${escapeHtml(r.notes)}</p>` : ''}
+        `;
+        resourcesList.appendChild(div);
+      });
+
+      const archivesList = document.getElementById('archives-list');
+      archivesList.innerHTML = '';
+      archives.forEach(ar => {
+        const div = document.createElement('div');
+        div.className = 'archive-item';
+        const typeLabel = ar.type === 'project' ? 'Archived project' : 'Archived area';
+        const meta = ar.type === 'project' && ar.deadline ? ` · ${escapeHtml(ar.deadline)}` : '';
+        div.innerHTML = `
+          <div class="container-header" style="cursor:pointer;">
+            <span class="container-title">${typeLabel}: ${escapeHtml(ar.title)}</span>
+            <span class="container-meta">${escapeHtml(ar.archived_at || '')}${meta}</span>
+          </div>
+          <div class="archived-tasks"></div>
+        `;
+        const tasksEl = div.querySelector('.archived-tasks');
+        (ar.tasks || []).forEach(t => {
+          tasksEl.appendChild(document.createElement('div')).textContent = `${escapeHtml(t.title)} (${t.priority || 'medium'})`;
+        });
+        div.querySelector('.container-header').addEventListener('click', () => div.classList.toggle('expanded'));
+        archivesList.appendChild(div);
+      });
+    }
+
+    async function loadDocuments() {
+      const [docsRes, tasksRes] = await Promise.all([
+        fetch('/api/documents'),
+        fetch('/api/tasks')
+      ]);
+      const docsData = await docsRes.json();
+      const tasksData = await tasksRes.json();
+      const docs = docsData.documents || [];
+      const projects = tasksData.projects || [];
+      const areas = tasksData.areas || [];
+      const tasks = tasksData.tasks || [];
+
+      const documentsList = document.getElementById('documents-list');
+      documentsList.innerHTML = '';
+      for (const doc of docs) {
+        const detailRes = await fetch(`/api/documents/${doc.id}`);
+        const detailData = await detailRes.json();
+        const linked = detailData.linked || [];
+        const div = document.createElement('div');
+        div.className = 'document-item';
+        div.dataset.id = doc.id;
+        const date = doc.uploaded_at ? new Date(doc.uploaded_at).toLocaleDateString() : '';
+        const linkedChips = linked.map(l =>
+          `<span class="link-chip">${escapeHtml(l.linked_type)}: ${escapeHtml(l.title)}
+            <button type="button" class="unlink-btn" data-type="${escapeHtml(l.linked_type)}" data-id="${l.linked_id}">×</button>
+          </span>`
+        ).join('');
+        div.innerHTML = `
+          <div>
+            <span class="doc-name">${escapeHtml(doc.original_name || doc.filename)}</span>
+            <span class="doc-meta">${escapeHtml(date)}</span>
+            <div class="doc-linked">${linkedChips || '<span class="doc-meta">Not linked</span>'}</div>
+            <div class="doc-link-form">
+              <label>Link to:</label>
+              <select class="link-type-select">
+                <option value="project">Project</option>
+                <option value="area">Area</option>
+                <option value="task">Task</option>
+              </select>
+              <select class="link-item-select"></select>
+              <button type="button" class="doc-link-add-btn">Add link</button>
+            </div>
+          </div>
+          <div style="margin-top:0.5rem;">
+            <a href="/documents/${doc.id}" target="_blank" rel="noopener">View</a>
+            <button type="button" class="doc-delete-btn" data-id="${doc.id}">Delete</button>
+          </div>
+        `;
+        const linkTypeSelect = div.querySelector('.link-type-select');
+        const linkItemSelect = div.querySelector('.link-item-select');
+
+        function fillLinkItemSelect() {
+          const type = linkTypeSelect.value;
+          linkItemSelect.innerHTML = '<option value="">Select…</option>';
+          if (type === 'project') projects.forEach(p => { const o = document.createElement('option'); o.value = p.id; o.textContent = p.title; linkItemSelect.appendChild(o); });
+          else if (type === 'area') areas.forEach(a => { const o = document.createElement('option'); o.value = a.id; o.textContent = a.title; linkItemSelect.appendChild(o); });
+          else tasks.forEach(t => { const o = document.createElement('option'); o.value = t.id; o.textContent = t.title; linkItemSelect.appendChild(o); });
+        }
+        fillLinkItemSelect();
+        linkTypeSelect.addEventListener('change', fillLinkItemSelect);
+
+        div.querySelector('.doc-link-add-btn').addEventListener('click', async () => {
+          const itemId = parseInt(linkItemSelect.value, 10);
+          if (!itemId) return;
+          const res = await fetch(`/api/documents/${doc.id}/link`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ linked_type: linkTypeSelect.value, linked_id: itemId })
+          });
+          if (!res.ok) { alert((await res.json()).detail || 'Could not add link'); return; }
+          loadDocuments();
+        });
+
+        div.querySelectorAll('.unlink-btn').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const res = await fetch(`/api/documents/${doc.id}/link`, {
+              method: 'DELETE',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ linked_type: btn.dataset.type, linked_id: parseInt(btn.dataset.id, 10) })
+            });
+            if (!res.ok) { alert((await res.json()).detail || 'Could not remove link'); return; }
+            loadDocuments();
+          });
+        });
+
+        div.querySelector('.doc-delete-btn').addEventListener('click', () => deleteDocument(doc.id));
+        documentsList.appendChild(div);
+      }
+    }
+
+    async function deleteDocument(docId) {
+      if (!confirm('Delete this document?')) return;
+      const res = await fetch(`/api/documents/${docId}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.detail || 'Could not delete document');
+        return;
+      }
+      loadDocuments();
+    }
+
+    document.getElementById('form-document-upload').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fileInput = document.getElementById('document-file');
+      const file = fileInput.files[0];
+      if (!file) return;
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('/api/documents/upload', {
+        method: 'POST',
+        body: formData
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        alert(err.detail || 'Upload failed');
+        return;
+      }
+      fileInput.value = '';
+      loadDocuments();
+    });
+
+    document.getElementById('form-project').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const title = document.getElementById('project-title').value.trim();
+      const goal = document.getElementById('project-goal').value.trim();
+      const deadline = document.getElementById('project-deadline').value;
+      if (!title || !goal || !deadline) return;
+      const res = await fetch('/api/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, goal, deadline })
+      });
+      if (!res.ok) return;
+      e.target.reset();
+      loadActive();
+    });
+
+    document.getElementById('form-area').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const title = document.getElementById('area-title').value.trim();
+      if (!title) return;
+      const res = await fetch('/api/areas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title })
+      });
+      if (!res.ok) return;
+      e.target.reset();
+      loadActive();
+    });
+
+    document.getElementById('form-task').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const title = document.getElementById('task-title').value.trim();
+      const priority = document.getElementById('task-priority').value;
+      const parentVal = document.getElementById('task-parent').value;
+      if (!title || !parentVal) return;
+      const [parent_type, parent_id] = parentVal.split(':');
+      const res = await fetch('/api/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, priority, parent_type, parent_id: parseInt(parent_id, 10) })
+      });
+      const data = await res.json();
+      if (data.error) {
+        alert(data.error);
+        return;
+      }
+      if (!res.ok) return;
+      e.target.reset();
+      loadActive();
+    });
+
+    document.getElementById('form-resource').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const title = document.getElementById('resource-title').value.trim();
+      const url = document.getElementById('resource-url').value.trim();
+      const notes = document.getElementById('resource-notes').value.trim();
+      if (!title) return;
+      await fetch('/api/resources', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, url, notes })
+      });
+      e.target.reset();
+      loadReference();
+    });
+
+    filterPriority.addEventListener('change', loadActive);
+    filterContainer.addEventListener('change', loadActive);
+    sortBy.addEventListener('change', loadActive);
+
+    loadActive();
   </script>
 </body>
 </html>
