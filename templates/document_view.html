@@ -136,7 +136,7 @@
 </head>
 <body>
   <div class="toolbar">
-    <a href="/" class="back-link">← Back to PARA</a>
+    <a href="/" class="back-link" id="back-to-para">← Back to PARA</a>
     <span class="zoom-controls">
       <button type="button" id="btn-zoom-out">−</button>
       <span class="zoom-value" id="zoom-value">100%</span>
@@ -146,6 +146,7 @@
     <a href="/api/documents/{{ doc_id }}/file" download="{{ doc.original_name or doc.filename }}" id="btn-download" class="toolbar-link">Download</a>
     <a href="#" id="btn-download-with-markups" class="toolbar-link toolbar-link-secondary">Download with markups</a>
     <button type="button" id="btn-save-pdf" class="toolbar-link btn-secondary">Save PDF</button>
+    <span class="save-indicator" id="save-indicator" aria-live="polite"></span>
     <button type="button" id="btn-edit" class="btn-primary">Edit</button>
     <span class="edit-mode-only" id="edit-mode-only" style="display: none;">
       <span class="mode-group">
@@ -155,7 +156,6 @@
       </span>
       <button type="button" id="btn-undo" title="Undo">↶ Undo</button>
       <button type="button" id="btn-redo" title="Redo">↷ Redo</button>
-      <span class="save-indicator" id="save-indicator" aria-live="polite"></span>
       <button type="button" id="btn-done" class="btn-secondary">Done</button>
     </span>
     <div class="context-wrap" id="context-wrap">
@@ -295,7 +295,7 @@
       saveTimeout = setTimeout(performSave, 500);
     }
 
-    async function performSave() {
+    async function performSave(skipSavePdf) {
       if (!dirty && saveStatus !== 'error') return;
       saveStatus = 'saving';
       updateSaveIndicator();
@@ -313,7 +313,9 @@
         dirty = false;
         saveStatus = 'saved';
         updateSaveIndicator();
-        performSavePdf().catch(e => console.error('PDF could not be saved', e));
+        if (!skipSavePdf) {
+          performSavePdf().catch(e => console.error('PDF could not be saved', e));
+        }
       } catch (e) {
         console.error('Failed to save markups', e);
         saveStatus = 'error';
@@ -351,6 +353,25 @@
         throw e;
       } finally {
         if (btn) btn.disabled = false;
+      }
+    }
+
+    async function handleSavePdfClick() {
+      const btn = document.getElementById('btn-save-pdf');
+      if (!btn || btn.disabled) return;
+      const originalText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Saving...';
+      try {
+        if (dirty || saveStatus === 'error') {
+          await performSave(true);
+        }
+        await performSavePdf();
+      } catch (e) {
+        // performSave / performSavePdf already update saveIndicatorEl
+      } finally {
+        btn.disabled = false;
+        btn.textContent = originalText;
       }
     }
 
@@ -721,7 +742,21 @@
     document.getElementById('btn-zoom-in').addEventListener('click', zoomIn);
     document.getElementById('btn-zoom-out').addEventListener('click', zoomOut);
     document.getElementById('btn-print').addEventListener('click', () => window.print());
-    document.getElementById('btn-save-pdf').addEventListener('click', () => performSavePdf());
+    document.getElementById('btn-save-pdf').addEventListener('click', () => handleSavePdfClick());
+
+    document.querySelector('.back-link').addEventListener('click', async (e) => {
+      e.preventDefault();
+      if (dirty || saveStatus === 'error') {
+        await performSave();
+        dirty = false;
+        saveStatus = 'saved';
+        updateSaveIndicator();
+      }
+      while (saveStatus === 'saving') {
+        await new Promise(r => setTimeout(r, 100));
+      }
+      window.location.href = '/';
+    });
     document.getElementById('btn-edit').addEventListener('click', () => {
       isEditMode = true;
       updateToolbarForMode();
