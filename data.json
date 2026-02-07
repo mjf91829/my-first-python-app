@@ -73,17 +73,11 @@
   "documents": [
     {
       "id": 1,
-      "filename": "76724492f8d2_Death_House_Original1.pdf",
-      "original_name": "Death House Original1.pdf",
-      "uploaded_at": "2026-02-07T19:09:52.220768+00:00"
+      "filename": "40042c180078_Death_House_Original.pdf",
+      "original_name": "Death House Original.pdf",
+      "uploaded_at": "2026-02-07T19:12:52.544027+00:00"
     }
   ],
-  "document_links": [
-    {
-      "document_id": 1,
-      "linked_type": "area",
-      "linked_id": 1
-    }
-  ],
+  "document_links": [],
   "document_markups": []
 }
