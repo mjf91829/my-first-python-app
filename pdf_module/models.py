@@ -20,3 +20,9 @@ class MarkupsSaveBody(BaseModel):
     linked_type: str | None = None  # None = document-level markups
     linked_id: int | None = None
     markups: list[dict[str, Any]] = Field(..., max_items=1000)
+
+
+class SavePdfBody(BaseModel):
+    """Payload for save-pdf: context for which markups to bake in."""
+    linked_type: str | None = None
+    linked_id: int | None = None

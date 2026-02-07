@@ -3,10 +3,10 @@
 import asyncio
 import logging
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, Body, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse, Response
 
-from pdf_module.models import DocumentLinkCreate, DocumentLinkRemove, MarkupsSaveBody
+from pdf_module.models import DocumentLinkCreate, DocumentLinkRemove, MarkupsSaveBody, SavePdfBody
 from pdf_module import service
 
 logger = logging.getLogger(__name__)
@@ -136,3 +136,50 @@ async def save_document_markups(doc_id: int, body: MarkupsSaveBody):
             detail="Invalid context or (linked_type, linked_id) not linked to this document",
         )
     return {"ok": True}
+
+
+@router.get("/documents/{doc_id}/file/with-markups")
+async def serve_document_file_with_markups(
+    doc_id: int,
+    linked_type: str | None = None,
+    linked_id: int | None = None,
+):
+    """Return PDF with current context markups embedded as annotations."""
+    if service.get_document(doc_id) is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+    try:
+        pdf_bytes = service.build_pdf_with_markups(
+            doc_id, linked_type=linked_type, linked_id=linked_id
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Document file not found")
+    doc = service.get_document(doc_id)
+    original = doc.get("original_name", doc.get("filename", "document.pdf"))
+    base = original.rsplit(".", 1)[0] if "." in original else original
+    filename = f"{base}_with_markups.pdf"
+    safe = "".join(c for c in filename if ord(c) >= 32 and ord(c) != 127) or "document_with_markups.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{safe}"'},
+    )
+
+
+@router.post("/documents/{doc_id}/save-pdf")
+async def save_document_pdf(doc_id: int, body: SavePdfBody | None = Body(None)):
+    """Persist PDF with current context's markups as a new version; previous file kept in versions."""
+    if service.get_document(doc_id) is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+    linked_type = body.linked_type if body else None
+    linked_id = body.linked_id if body else None
+    try:
+        result = service.save_document_pdf_version(
+            doc_id, linked_type=linked_type, linked_id=linked_id
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Document file not found")
