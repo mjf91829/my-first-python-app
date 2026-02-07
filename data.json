@@ -80,39 +80,17 @@
   "documents": [
     {
       "id": 1,
-      "filename": "a4ce0c4ab713_Zoltan.pdf",
-      "original_name": "Zoltan.pdf",
-      "uploaded_at": "2026-02-07T19:33:47.436726+00:00"
+      "filename": "844e05b7e3d1_Death_House_Original1.pdf",
+      "original_name": "Death House Original1.pdf",
+      "uploaded_at": "2026-02-07T20:45:17.028414+00:00"
     },
     {
       "id": 2,
-      "filename": "8b6de1027540_Death_House_Original1.pdf",
-      "original_name": "Death House Original1.pdf",
-      "uploaded_at": "2026-02-07T19:40:19.080958+00:00"
-    },
-    {
-      "id": 3,
-      "filename": "0aedfdace33d_Nyxara_Drathir.pdf",
+      "filename": "0c98da676312_Nyxara_Drathir.pdf",
       "original_name": "Nyxara Drathir.pdf",
-      "uploaded_at": "2026-02-07T20:20:10.912722+00:00"
+      "uploaded_at": "2026-02-07T20:46:02.059671+00:00"
     }
   ],
-  "document_links": [
-    {
-      "document_id": 1,
-      "linked_type": "project",
-      "linked_id": 1
-    },
-    {
-      "document_id": 1,
-      "linked_type": "task",
-      "linked_id": 1
-    },
-    {
-      "document_id": 1,
-      "linked_type": "area",
-      "linked_id": 2
-    }
-  ],
+  "document_links": [],
   "document_markups": []
 }
