@@ -153,21 +153,107 @@
     .para-linked-docs .doc-unlink { background: none; border: none; cursor: pointer; color: var(--text-secondary); padding: 0; font-size: 0.9rem; }
     .para-link-doc-form { margin-top: 0.4rem; display: flex; gap: 0.25rem; align-items: center; flex-wrap: wrap; font-size: 0.85rem; }
     .para-link-doc-form select { padding: 0.35rem 0.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border); }
+    .dashboard-stats { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 2rem; }
+    .stat-card {
+      flex: 1;
+      min-width: 100px;
+      padding: 1.25rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-card);
+      border-left: 4px solid var(--accent);
+    }
+    .stat-value { display: block; font-size: 2rem; font-weight: 700; color: var(--accent); }
+    .stat-label { font-size: 0.875rem; color: var(--text-secondary); }
+    .dashboard-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 2rem; }
+    @media (max-width: 640px) { .dashboard-grid { grid-template-columns: 1fr; } }
+    .dashboard-section { margin-bottom: 1.5rem; }
+    .dashboard-section-title { font-size: 1rem; font-weight: 600; margin: 0 0 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.02em; }
+    .dashboard-list { display: flex; flex-direction: column; gap: 0.5rem; }
+    .dashboard-project-item, .dashboard-task-item {
+      padding: 0.75rem 1rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 0.9rem;
+    }
+    .dashboard-project-item { border-left: 4px solid var(--accent); }
+    .dashboard-project-meta { font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem; }
+    .dashboard-task-item .priority-pill {
+      display: inline-block;
+      padding: 0.15rem 0.4rem;
+      border-radius: 999px;
+      font-size: 0.65rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      margin-right: 0.5rem;
+    }
+    .dashboard-task-item .priority-pill.high { background: rgba(220, 38, 38, 0.15); color: var(--priority-high); }
+    .dashboard-task-item .priority-pill.medium { background: rgba(217, 119, 6, 0.15); color: var(--priority-medium); }
+    .dashboard-task-item .priority-pill.low { background: rgba(107, 114, 128, 0.2); color: var(--priority-low); }
+    .dashboard-areas-row { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+    .dashboard-area-chip {
+      padding: 0.4rem 0.75rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      font-size: 0.85rem;
+      color: var(--text-primary);
+    }
+    .dashboard-cta { margin-top: 2rem; }
+    .dashboard-empty { font-size: 0.9rem; color: var(--text-secondary); margin: 0; }
   </style>
 </head>
 <body>
+  <script type="application/json" id="dashboard-preload">{{ dict(projects=projects, areas=areas, tasks=tasks) | tojson }}</script>
   <aside class="app-sidebar">
     <div class="logo">PARA</div>
     <nav>
-      <button type="button" id="btn-active" class="active">Active</button>
+      <button type="button" id="btn-dashboard" class="active">Dashboard</button>
+      <button type="button" id="btn-active">Task Manager</button>
       <button type="button" id="btn-reference">Reference</button>
       <button type="button" id="btn-documents">Documents</button>
     </nav>
   </aside>
   <main class="app-main">
-  <h1>Task Manager</h1>
+  <h1 id="main-title">Dashboard</h1>
 
-  <div id="panel-active" class="panel visible">
+  <div id="panel-dashboard" class="panel visible">
+    <div class="dashboard-stats">
+      <div class="stat-card" id="stat-projects">
+        <span class="stat-value">0</span>
+        <span class="stat-label">Projects</span>
+      </div>
+      <div class="stat-card" id="stat-areas">
+        <span class="stat-value">0</span>
+        <span class="stat-label">Areas</span>
+      </div>
+      <div class="stat-card" id="stat-tasks">
+        <span class="stat-value">0</span>
+        <span class="stat-label">Tasks</span>
+      </div>
+    </div>
+    <div class="dashboard-grid">
+      <div class="dashboard-section">
+        <h2 class="dashboard-section-title">Projects</h2>
+        <div id="dashboard-projects" class="dashboard-list"></div>
+      </div>
+      <div class="dashboard-section">
+        <h2 class="dashboard-section-title">Quick Tasks</h2>
+        <div id="dashboard-tasks" class="dashboard-list"></div>
+      </div>
+    </div>
+    <div class="dashboard-section">
+      <h2 class="dashboard-section-title">Areas</h2>
+      <div id="dashboard-areas" class="dashboard-areas-row"></div>
+    </div>
+    <div class="dashboard-cta">
+      <button type="button" id="btn-go-task-manager" class="primary">Go to Full Task Manager</button>
+    </div>
+  </div>
+
+  <div id="panel-active" class="panel">
     <div class="form-section">
       <h3>Create project</h3>
       <form id="form-project">
@@ -260,9 +346,16 @@
 
   </main>
   <script>
+    const preloadEl = document.getElementById('dashboard-preload');
+    const preload = preloadEl ? JSON.parse(preloadEl.textContent) : {};
+    const { projects: preloadedProjects = [], areas: preloadedAreas = [], tasks: preloadedTasks = [] } = preload;
+
+    const btnDashboard = document.getElementById('btn-dashboard');
     const btnActive = document.getElementById('btn-active');
     const btnReference = document.getElementById('btn-reference');
     const btnDocuments = document.getElementById('btn-documents');
+    const mainTitle = document.getElementById('main-title');
+    const panelDashboard = document.getElementById('panel-dashboard');
     const panelActive = document.getElementById('panel-active');
     const panelReference = document.getElementById('panel-reference');
     const panelDocuments = document.getElementById('panel-documents');
@@ -272,22 +365,83 @@
     const sortBy = document.getElementById('sort-by');
 
     function setView(view) {
+      const isDashboard = view === 'dashboard';
       const isActive = view === 'active';
       const isReference = view === 'reference';
       const isDocuments = view === 'documents';
+      btnDashboard.classList.toggle('active', isDashboard);
       btnActive.classList.toggle('active', isActive);
       btnReference.classList.toggle('active', isReference);
       btnDocuments.classList.toggle('active', isDocuments);
+      panelDashboard.classList.toggle('visible', isDashboard);
       panelActive.classList.toggle('visible', isActive);
       panelReference.classList.toggle('visible', isReference);
       panelDocuments.classList.toggle('visible', isDocuments);
-      if (isActive) loadActive();
+      mainTitle.textContent = isDashboard ? 'Dashboard' : isActive ? 'Task Manager' : isReference ? 'Reference' : 'Documents';
+      if (isDashboard) renderDashboard();
+      else if (isActive) loadActive();
       else if (isReference) loadReference();
       else if (isDocuments) loadDocuments();
     }
+
+    function renderDashboard() {
+      document.getElementById('stat-projects').querySelector('.stat-value').textContent = preloadedProjects.length;
+      document.getElementById('stat-areas').querySelector('.stat-value').textContent = preloadedAreas.length;
+      document.getElementById('stat-tasks').querySelector('.stat-value').textContent = preloadedTasks.length;
+
+      const projectsEl = document.getElementById('dashboard-projects');
+      projectsEl.innerHTML = '';
+      preloadedProjects.forEach(p => {
+        const div = document.createElement('div');
+        div.className = 'dashboard-project-item';
+        div.innerHTML = `
+          <strong>${escapeHtml(p.title || '')}</strong>
+          <div class="dashboard-project-meta">${escapeHtml(p.goal || '')}${p.deadline ? ' · ' + escapeHtml(p.deadline) : ''}</div>
+        `;
+        projectsEl.appendChild(div);
+      });
+      if (preloadedProjects.length === 0) {
+        projectsEl.innerHTML = '<p class="dashboard-empty">No projects yet.</p>';
+      }
+
+      const tasksEl = document.getElementById('dashboard-tasks');
+      tasksEl.innerHTML = '';
+      const priorityOrder = { high: 0, medium: 1, low: 2 };
+      const sortedTasks = [...preloadedTasks].sort((a, b) =>
+        (priorityOrder[(a.priority || 'medium').toLowerCase()] ?? 1) - (priorityOrder[(b.priority || 'medium').toLowerCase()] ?? 1)
+      );
+      const displayTasks = sortedTasks.slice(0, 8);
+      displayTasks.forEach(t => {
+        const div = document.createElement('div');
+        div.className = 'dashboard-task-item';
+        const pri = (t.priority || 'medium').toLowerCase();
+        div.innerHTML = `<span class="priority-pill ${pri}">${pri}</span>${escapeHtml(t.title || '')}`;
+        tasksEl.appendChild(div);
+      });
+      if (displayTasks.length === 0) {
+        tasksEl.innerHTML = '<p class="dashboard-empty">No tasks yet.</p>';
+      }
+
+      const areasEl = document.getElementById('dashboard-areas');
+      areasEl.innerHTML = '';
+      const projectMap = Object.fromEntries(preloadedProjects.map(p => [p.id, p]));
+      preloadedAreas.forEach(a => {
+        const chip = document.createElement('span');
+        chip.className = 'dashboard-area-chip';
+        const parentLabel = a.project_id && projectMap[a.project_id] ? ` (${projectMap[a.project_id].title})` : '';
+        chip.textContent = (a.title || '') + parentLabel;
+        areasEl.appendChild(chip);
+      });
+      if (preloadedAreas.length === 0) {
+        areasEl.innerHTML = '<p class="dashboard-empty">No areas yet.</p>';
+      }
+    }
+
+    btnDashboard.addEventListener('click', () => setView('dashboard'));
     btnActive.addEventListener('click', () => setView('active'));
     btnReference.addEventListener('click', () => setView('reference'));
     btnDocuments.addEventListener('click', () => setView('documents'));
+    document.getElementById('btn-go-task-manager').addEventListener('click', () => setView('active'));
 
     function escapeHtml(s) {
       const div = document.createElement('div');
@@ -297,8 +451,9 @@
 
     function buildParaLinkedDocs(linkedType, linkedId, linkedDocs, allDocs, onUnlink, onAddLink) {
       const docs = linkedDocs || [];
+      const docQuery = (linkedType != null && linkedId != null) ? `?linked_type=${encodeURIComponent(linkedType)}&linked_id=${linkedId}` : '';
       const docsHtml = docs.map(d =>
-        `<span class="doc-ref"><a href="/documents/${d.id}" target="_blank" rel="noopener">${escapeHtml(d.original_name || d.filename)}</a>
+        `<span class="doc-ref"><a href="/documents/${d.id}${docQuery}" target="_blank" rel="noopener">${escapeHtml(d.original_name || d.filename)}</a>
           <button type="button" class="doc-unlink" data-doc-id="${d.id}">×</button></span>`
       ).join('');
       const opts = allDocs.filter(d => !docs.some(x => x.id === d.id)).map(d =>
@@ -862,7 +1017,7 @@
     filterContainer.addEventListener('change', loadActive);
     sortBy.addEventListener('change', loadActive);
 
-    loadActive();
+    renderDashboard();
   </script>
 </body>
 </html>

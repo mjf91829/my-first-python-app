@@ -7,15 +7,99 @@
   <style>
     * { box-sizing: border-box; }
     body { margin: 0; font-family: system-ui, sans-serif; display: flex; flex-direction: column; height: 100vh; }
-    .toolbar { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: #f5f5f5; border-bottom: 1px solid #ddd; }
-    .toolbar a, .toolbar button { padding: 0.4rem 0.8rem; text-decoration: none; color: #333; background: #fff; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; font-size: 0.9rem; }
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      background: #f5f5f5;
+      border-bottom: 1px solid #ddd;
+      flex-wrap: wrap;
+    }
+    .toolbar a, .toolbar button {
+      padding: 0.4rem 0.8rem;
+      text-decoration: none;
+      color: #333;
+      background: #fff;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
     .toolbar a:hover, .toolbar button:hover { background: #eee; }
+    .toolbar button.active { background: #2563eb; color: #fff; border-color: #2563eb; }
     .toolbar .back-link { margin-right: 0.5rem; }
     .toolbar .zoom-controls { display: flex; align-items: center; gap: 0.25rem; }
     .toolbar .zoom-controls button { min-width: 2rem; }
     .toolbar .zoom-value { font-size: 0.85rem; color: #666; min-width: 4ch; }
-    .pdf-container { flex: 1; overflow: auto; background: #525659; display: flex; justify-content: center; padding: 1rem; }
-    .pdf-container embed { max-width: 100%; min-height: 600px; flex: 1; }
+    .toolbar .mode-group { display: flex; gap: 0.25rem; margin-left: 0.5rem; }
+    .toolbar .context-wrap { margin-left: auto; display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; color: #666; }
+    .toolbar .context-wrap select { padding: 0.35rem 0.5rem; border-radius: 4px; border: 1px solid #ccc; }
+    .pdf-container {
+      flex: 1;
+      overflow: auto;
+      background: #525659;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 1rem;
+    }
+    .page-wrap {
+      position: relative;
+      margin-bottom: 1rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+    .page-wrap canvas { display: block; vertical-align: top; }
+    .page-annotations {
+      position: absolute;
+      left: 0;
+      top: 0;
+      pointer-events: none;
+    }
+    .page-annotations.interactive { pointer-events: auto; }
+    .page-annotations .anno-highlight {
+      position: absolute;
+      background: rgba(255, 235, 59, 0.4);
+      border: 1px solid rgba(255, 193, 7, 0.8);
+      pointer-events: auto;
+      cursor: pointer;
+    }
+    .page-annotations .anno-comment {
+      position: absolute;
+      width: 24px;
+      height: 24px;
+      background: #ff9800;
+      border-radius: 50%;
+      cursor: pointer;
+      pointer-events: auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      color: #fff;
+      transform: translate(-50%, -50%);
+    }
+    .page-annotations .anno-comment.has-text { background: #f57c00; }
+    .comment-popover {
+      position: absolute;
+      background: #fff;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      padding: 0.5rem 0.75rem;
+      max-width: 280px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      z-index: 10;
+      pointer-events: auto;
+      font-size: 0.9rem;
+    }
+    .comment-popover .comment-actions { margin-top: 0.5rem; }
+    .comment-popover .comment-actions button { margin-right: 0.25rem; font-size: 0.8rem; }
+    .highlight-preview {
+      position: absolute;
+      background: rgba(255, 235, 59, 0.5);
+      border: 1px dashed #f57c00;
+      pointer-events: none;
+    }
   </style>
 </head>
 <body>
@@ -28,33 +112,383 @@
     </span>
     <button type="button" id="btn-print">Print</button>
     <a href="/api/documents/{{ doc_id }}/file" download="{{ doc.original_name or doc.filename }}" id="btn-download">Download</a>
+    <span class="mode-group">
+      <button type="button" id="btn-mode-none">Cursor</button>
+      <button type="button" id="btn-mode-highlight">Highlight</button>
+      <button type="button" id="btn-mode-comment">Comment</button>
+    </span>
+    <div class="context-wrap" id="context-wrap">
+      <label for="context-select">Markups for:</label>
+      <select id="context-select"></select>
+    </div>
   </div>
-  <div class="pdf-container">
-    <embed id="pdf-embed" src="/api/documents/{{ doc_id }}/file#zoom=100" type="application/pdf" />
-  </div>
-  <script>
-    const embed = document.getElementById('pdf-embed');
-    const zoomValue = document.getElementById('zoom-value');
-    let zoom = 100;
+  <div class="pdf-container" id="pdf-container"></div>
 
-    function updateZoom() {
-      zoomValue.textContent = zoom + '%';
-      embed.src = embed.src.replace(/#.*$/, '') + '#zoom=' + zoom;
+  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/legacy/build/pdf.min.js"></script>
+  <script>
+    if (typeof pdfjsLib !== 'undefined') {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/legacy/build/pdf.worker.min.js';
+    }
+    const DOC_ID = {{ doc_id }};
+    const LINKED_TYPE = {{ linked_type | tojson if linked_type is not none else 'null' }};
+    const LINKED_ID = {{ linked_id | tojson if linked_id is not none else 'null' }};
+
+    let pdfDoc = null;
+    let scale = 1.0;
+    let markups = [];
+    let linkedOptions = [];  // { linked_type, linked_id, title }
+    let currentLinkedType = LINKED_TYPE;
+    let currentLinkedId = LINKED_ID;
+    let mode = 'none';  // 'none' | 'highlight' | 'comment'
+    let dragStart = null;
+    let previewEl = null;
+
+    const container = document.getElementById('pdf-container');
+    const zoomValueEl = document.getElementById('zoom-value');
+    const contextWrap = document.getElementById('context-wrap');
+    const contextSelect = document.getElementById('context-select');
+
+    function updateZoomDisplay() {
+      zoomValueEl.textContent = Math.round(scale * 100) + '%';
     }
 
-    document.getElementById('btn-zoom-in').addEventListener('click', () => {
-      zoom = Math.min(200, zoom + 25);
-      updateZoom();
-    });
+    function getMarkupsUrl() {
+      const params = new URLSearchParams();
+      if (currentLinkedType != null) params.set('linked_type', currentLinkedType);
+      if (currentLinkedId != null) params.set('linked_id', currentLinkedId);
+      const q = params.toString();
+      return `/api/documents/${DOC_ID}/markups` + (q ? '?' + q : '');
+    }
 
-    document.getElementById('btn-zoom-out').addEventListener('click', () => {
-      zoom = Math.max(50, zoom - 25);
-      updateZoom();
-    });
+    async function loadMarkups() {
+      try {
+        const res = await fetch(getMarkupsUrl());
+        const data = await res.json();
+        markups = Array.isArray(data.markups) ? data.markups : [];
+      } catch (e) {
+        markups = [];
+      }
+      renderMarkups();
+    }
 
-    document.getElementById('btn-print').addEventListener('click', () => {
-      window.print();
-    });
+    async function saveMarkups() {
+      try {
+        await fetch(`/api/documents/${DOC_ID}/markups`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            linked_type: currentLinkedType,
+            linked_id: currentLinkedId,
+            markups: markups,
+          }),
+        });
+      } catch (e) {
+        console.error('Failed to save markups', e);
+      }
+    }
+
+    function id() {
+      return 'm_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    }
+
+    function setMode(m) {
+      mode = m;
+      document.getElementById('btn-mode-none').classList.toggle('active', mode === 'none');
+      document.getElementById('btn-mode-highlight').classList.toggle('active', mode === 'highlight');
+      document.getElementById('btn-mode-comment').classList.toggle('active', mode === 'comment');
+      document.querySelectorAll('.page-annotations').forEach(el => el.classList.toggle('interactive', mode !== 'none'));
+      if (previewEl) { previewEl.remove(); previewEl = null; }
+    }
+
+    function renderMarkups() {
+      document.querySelectorAll('.page-annotations').forEach(w => {
+        const wrap = w;
+        const pageIndex = parseInt(w.dataset.page, 10);
+        const pageMarkups = markups.filter(m => m.page === pageIndex);
+        wrap.querySelectorAll('.anno-highlight, .anno-comment, .comment-popover').forEach(el => el.remove());
+        const pageWrap = wrap.closest('.page-wrap');
+        if (!pageWrap) return;
+        const canvas = pageWrap.querySelector('canvas');
+        if (!canvas) return;
+        const w = canvas.width;
+        const h = canvas.height;
+        pageMarkups.forEach(m => {
+          if (m.type === 'highlight' && m.bounds) {
+            const b = m.bounds;
+            const div = document.createElement('div');
+            div.className = 'anno-highlight';
+            div.dataset.id = m.id;
+            div.style.left = (b.x * 100) + '%';
+            div.style.top = (b.y * 100) + '%';
+            div.style.width = (b.width * 100) + '%';
+            div.style.height = (b.height * 100) + '%';
+            div.title = 'Click to delete';
+            div.addEventListener('click', (e) => { e.stopPropagation(); deleteMarkup(m.id); });
+            wrap.appendChild(div);
+          } else if ((m.type === 'comment' || m.type === 'sticky_note') && m.bounds) {
+            const b = m.bounds;
+            const dot = document.createElement('div');
+            dot.className = 'anno-comment' + (m.text ? ' has-text' : '');
+            dot.dataset.id = m.id;
+            dot.style.left = (b.x * 100) + '%';
+            dot.style.top = (b.y * 100) + '%';
+            dot.textContent = '💬';
+            dot.title = m.text || 'Add comment';
+            dot.addEventListener('click', (e) => {
+              e.stopPropagation();
+              showCommentPopover(m, dot);
+            });
+            wrap.appendChild(dot);
+          }
+        });
+      });
+    }
+
+    function showCommentPopover(markup, anchor) {
+      let pop = document.querySelector('.comment-popover');
+      if (pop) pop.remove();
+      pop = document.createElement('div');
+      pop.className = 'comment-popover';
+      const textarea = document.createElement('textarea');
+      textarea.rows = 3;
+      textarea.value = markup.text || '';
+      textarea.placeholder = 'Comment text...';
+      textarea.style.width = '100%';
+      const saveBtn = document.createElement('button');
+      saveBtn.textContent = 'Save';
+      saveBtn.type = 'button';
+      const delBtn = document.createElement('button');
+      delBtn.textContent = 'Delete';
+      delBtn.type = 'button';
+      const actions = document.createElement('div');
+      actions.className = 'comment-actions';
+      actions.append(saveBtn, delBtn);
+      pop.append(textarea, actions);
+      const rect = anchor.getBoundingClientRect();
+      pop.style.position = 'fixed';
+      pop.style.left = rect.left + 'px';
+      pop.style.top = (rect.top - 120) + 'px';
+      document.body.appendChild(pop);
+      textarea.focus();
+      saveBtn.addEventListener('click', () => {
+        const idx = markups.findIndex(m => m.id === markup.id);
+        if (idx >= 0) markups[idx].text = textarea.value.trim();
+        saveMarkups();
+        renderMarkups();
+        pop.remove();
+      });
+      delBtn.addEventListener('click', () => {
+        deleteMarkup(markup.id);
+        pop.remove();
+      });
+    }
+
+    function deleteMarkup(markupId) {
+      markups = markups.filter(m => m.id !== markupId);
+      saveMarkups();
+      renderMarkups();
+    }
+
+    function addMarkup(m) {
+      markups.push(m);
+      saveMarkups();
+      renderMarkups();
+    }
+
+    function normalizeBounds(x, y, w, h, pageWidth, pageHeight) {
+      return {
+        x: x / pageWidth,
+        y: y / pageHeight,
+        width: w / pageWidth,
+        height: h / pageHeight,
+      };
+    }
+
+    async function loadLinkedOptions() {
+      try {
+        const res = await fetch(`/api/documents/${DOC_ID}`);
+        const data = await res.json();
+        linkedOptions = (data.linked || []).map(l => ({
+          linked_type: l.linked_type,
+          linked_id: l.linked_id,
+          title: l.title || `${l.linked_type} ${l.linked_id}`,
+        }));
+      } catch (e) {
+        linkedOptions = [];
+      }
+      contextSelect.innerHTML = '';
+      contextSelect.appendChild(new Option('Document (no context)', '', true));
+      linkedOptions.forEach(opt => {
+        const o = new Option(opt.title, JSON.stringify({ t: opt.linked_type, i: opt.linked_id }));
+        contextSelect.appendChild(o);
+      });
+      const hasContext = currentLinkedType != null && currentLinkedId != null;
+      if (hasContext) {
+        const val = JSON.stringify({ t: currentLinkedType, i: currentLinkedId });
+        const found = Array.from(contextSelect.options).some(o => o.value === val);
+        if (found) contextSelect.value = val;
+      }
+      contextSelect.addEventListener('change', () => {
+        const v = contextSelect.value;
+        if (!v) {
+          currentLinkedType = null;
+          currentLinkedId = null;
+        } else {
+          const { t, i } = JSON.parse(v);
+          currentLinkedType = t;
+          currentLinkedId = i;
+        }
+        loadMarkups();
+      });
+      if (linkedOptions.length === 0) contextWrap.style.display = 'none';
+    }
+
+    function setupAnnotationLayer(pageWrap, pageIndex, pageWidth, pageHeight) {
+      const overlay = pageWrap.querySelector('.page-annotations');
+      if (!overlay) return;
+      overlay.dataset.page = pageIndex;
+      overlay.style.width = pageWidth + 'px';
+      overlay.style.height = pageHeight + 'px';
+
+      overlay.addEventListener('mousedown', (e) => {
+        if (mode !== 'highlight' && mode !== 'comment') return;
+        const rect = overlay.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        if (mode === 'highlight') {
+          dragStart = { x, y };
+          if (previewEl) previewEl.remove();
+          previewEl = document.createElement('div');
+          previewEl.className = 'highlight-preview';
+          previewEl.style.left = x + 'px';
+          previewEl.style.top = y + 'px';
+          previewEl.style.width = '0';
+          previewEl.style.height = '0';
+          overlay.appendChild(previewEl);
+        } else if (mode === 'comment') {
+          const text = prompt('Comment text (optional):');
+          const nx = x / pageWidth;
+          const ny = y / pageHeight;
+          addMarkup({
+            id: id(),
+            page: pageIndex,
+            type: 'comment',
+            bounds: { x: nx, y: ny, width: 0.03, height: 0.03 },
+            text: text ? text.trim() : '',
+          });
+        }
+      });
+
+      overlay.addEventListener('mousemove', (e) => {
+        if (mode !== 'highlight' || !dragStart || !previewEl) return;
+        const rect = overlay.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        const left = Math.min(dragStart.x, x);
+        const top = Math.min(dragStart.y, y);
+        const width = Math.abs(x - dragStart.x);
+        const height = Math.abs(y - dragStart.y);
+        previewEl.style.left = left + 'px';
+        previewEl.style.top = top + 'px';
+        previewEl.style.width = width + 'px';
+        previewEl.style.height = height + 'px';
+      });
+
+      overlay.addEventListener('mouseup', (e) => {
+        if (mode !== 'highlight' || !dragStart || !previewEl) return;
+        const rect = overlay.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        const left = Math.min(dragStart.x, x);
+        const top = Math.min(dragStart.y, y);
+        const width = Math.abs(x - dragStart.x);
+        const height = Math.abs(y - dragStart.y);
+        previewEl.remove();
+        previewEl = null;
+        dragStart = null;
+        if (width < 5 || height < 5) return;
+        const bounds = normalizeBounds(left, top, width, height, pageWidth, pageHeight);
+        addMarkup({
+          id: id(),
+          page: pageIndex,
+          type: 'highlight',
+          bounds,
+          color: '#ffeb3b',
+        });
+      });
+    }
+
+    async function renderPdf() {
+      container.innerHTML = '';
+      if (!pdfDoc) return;
+      const numPages = pdfDoc.numPages;
+      for (let i = 1; i <= numPages; i++) {
+        const page = await pdfDoc.getPage(i);
+        const viewport = page.getViewport({ scale });
+        const pageIndex = i - 1;
+        const w = viewport.width;
+        const h = viewport.height;
+        const pageWrap = document.createElement('div');
+        pageWrap.className = 'page-wrap';
+        const canvas = document.createElement('canvas');
+        canvas.height = h;
+        canvas.width = w;
+        const ctx = canvas.getContext('2d');
+        const renderCtx = { canvasContext: ctx, viewport };
+        page.render(renderCtx);
+        const overlay = document.createElement('div');
+        overlay.className = 'page-annotations';
+        overlay.style.width = w + 'px';
+        overlay.style.height = h + 'px';
+        overlay.dataset.page = pageIndex;
+        pageWrap.appendChild(canvas);
+        pageWrap.appendChild(overlay);
+        container.appendChild(pageWrap);
+        setupAnnotationLayer(pageWrap, pageIndex, w, h);
+      }
+      renderMarkups();
+    }
+
+    async function loadPdf() {
+      try {
+        const res = await fetch(`/api/documents/${DOC_ID}/file`);
+        const blob = await res.blob();
+        const data = await blob.arrayBuffer();
+        pdfDoc = await pdfjsLib.getDocument({ data }).promise;
+        await loadLinkedOptions();
+        if (currentLinkedType == null && currentLinkedId == null && linkedOptions.length > 0) {
+          const first = linkedOptions[0];
+          currentLinkedType = first.linked_type;
+          currentLinkedId = first.linked_id;
+          contextSelect.value = JSON.stringify({ t: first.linked_type, i: first.linked_id });
+        }
+        await loadMarkups();
+        await renderPdf();
+      } catch (e) {
+        container.textContent = 'Failed to load PDF: ' + e.message;
+      }
+    }
+
+    function zoomIn() {
+      scale = Math.min(3, scale + 0.25);
+      updateZoomDisplay();
+      renderPdf();
+    }
+    function zoomOut() {
+      scale = Math.max(0.5, scale - 0.25);
+      updateZoomDisplay();
+      renderPdf();
+    }
+
+    document.getElementById('btn-zoom-in').addEventListener('click', zoomIn);
+    document.getElementById('btn-zoom-out').addEventListener('click', zoomOut);
+    document.getElementById('btn-print').addEventListener('click', () => window.print());
+    document.getElementById('btn-mode-none').addEventListener('click', () => setMode('none'));
+    document.getElementById('btn-mode-highlight').addEventListener('click', () => setMode('highlight'));
+    document.getElementById('btn-mode-comment').addEventListener('click', () => setMode('comment'));
+
+    updateZoomDisplay();
+    loadPdf();
   </script>
 </body>
 </html>

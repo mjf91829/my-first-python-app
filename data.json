@@ -70,6 +70,39 @@
       "parent_id": 2
     }
   ],
-  "documents": [],
-  "document_links": []
+  "documents": [
+    {
+      "id": 1,
+      "filename": "5def8379ab3f_Death_House_Original.pdf",
+      "original_name": "Death House Original.pdf",
+      "uploaded_at": "2026-02-07T18:55:18.913543+00:00"
+    }
+  ],
+  "document_links": [
+    {
+      "document_id": 1,
+      "linked_type": "project",
+      "linked_id": 1
+    }
+  ],
+  "document_markups": [
+    {
+      "document_id": 1,
+      "linked_type": "project",
+      "linked_id": 1,
+      "markups": [
+        {
+          "id": "t1",
+          "page": 0,
+          "type": "highlight",
+          "bounds": {
+            "x": 0.1,
+            "y": 0.1,
+            "width": 0.2,
+            "height": 0.05
+          }
+        }
+      ]
+    }
+  ]
 }

@@ -50,24 +50,45 @@ app.include_router(pdf_router, prefix="/api")
 
 
 def _render_template(name: str, request: Request, **kwargs):
+    import json
     from jinja2 import Environment, FileSystemLoader
     env = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)))
+    env.filters["tojson"] = lambda v: json.dumps(v)
     template = env.get_template(name)
     return template.render(request=request, **kwargs)
 
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
-    return _render_template("index.html", request=request)
+    data = load_data()
+    return _render_template(
+        "index.html",
+        request=request,
+        projects=data["projects"],
+        areas=data["areas"],
+        tasks=data["tasks"],
+    )
 
 
 @app.get("/documents/{doc_id}", response_class=HTMLResponse)
-async def document_view(request: Request, doc_id: int):
+async def document_view(
+    request: Request,
+    doc_id: int,
+    linked_type: str | None = None,
+    linked_id: int | None = None,
+):
     from pdf_module import service
     doc = service.get_document(doc_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
-    return _render_template("document_view.html", request=request, doc_id=doc_id, doc=doc)
+    return _render_template(
+        "document_view.html",
+        request=request,
+        doc_id=doc_id,
+        doc=doc,
+        linked_type=linked_type,
+        linked_id=linked_id,
+    )
 
 
 @app.get("/api/projects")
