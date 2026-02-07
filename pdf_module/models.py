@@ -19,4 +19,4 @@ class MarkupsSaveBody(BaseModel):
     """Payload for saving markups for a document + context."""
     linked_type: str | None = None  # None = document-level markups
     linked_id: int | None = None
-    markups: list[dict[str, Any]] = Field(..., max_length=1000)
+    markups: list[dict[str, Any]] = Field(..., max_items=1000)
