@@ -6,9 +6,11 @@ from pathlib import Path
 
 from filelock import FileLock
 
-DATA_FILE = Path(__file__).resolve().parent / "data.json"
-TASKS_FILE_LEGACY = Path(__file__).resolve().parent / "tasks.json"
-UPLOAD_DIR = Path(__file__).resolve().parent / "documents"
+_DATA_DIR = Path(__file__).resolve().parent
+DATA_FILE = _DATA_DIR / "data.json"
+TASKS_FILE_LEGACY = _DATA_DIR / "archive" / "archive_tasks.json"
+TASKS_FILE_LEGACY_ROOT = _DATA_DIR / "tasks.json"  # backward compat: root location
+UPLOAD_DIR = _DATA_DIR / "documents"
 
 logger = logging.getLogger(__name__)
 
@@ -37,16 +39,26 @@ def _normalize_data(data: dict) -> dict:
     return data
 
 
+def _get_legacy_tasks_path() -> Path | None:
+    """Return path to legacy tasks file if it exists (archive first, then root)."""
+    if TASKS_FILE_LEGACY.exists():
+        return TASKS_FILE_LEGACY
+    if TASKS_FILE_LEGACY_ROOT.exists():
+        return TASKS_FILE_LEGACY_ROOT
+    return None
+
+
 def load_data() -> dict:
     if not DATA_FILE.exists():
         data = default_data()
-        if TASKS_FILE_LEGACY.exists():
+        legacy_path = _get_legacy_tasks_path()
+        if legacy_path is not None:
             try:
                 with FileLock(DATA_FILE.with_suffix(".lock")):
-                    with open(TASKS_FILE_LEGACY, encoding="utf-8") as f:
+                    with open(legacy_path, encoding="utf-8") as f:
                         raw = json.load(f)
             except (json.JSONDecodeError, OSError) as e:
-                logger.warning("Could not load legacy tasks file: %s", e)
+                logger.warning("Could not load legacy tasks file %s: %s", legacy_path, e)
                 return data
             if isinstance(raw, list) and raw and "parent_id" not in raw[0]:
                 inbox = {"id": 1, "title": "Inbox"}
